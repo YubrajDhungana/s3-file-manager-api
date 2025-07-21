@@ -26,6 +26,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 router.get("/", fileController.getFilesByBucket);
+router.get("/file-url", fileController.getFileURL);
 router.post("/upload", upload.array("files"), fileController.uploadFile);
 router.delete("/:id", fileController.deleteFile);
 

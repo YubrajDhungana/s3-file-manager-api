@@ -1,5 +1,6 @@
 const File = require("../models/files");
 const {S3Client, ListObjectsV2Command} = require("@aws-sdk/client-s3");
+const { getObjectURL, putObject, listFiles } = require("../configs/s3");
 const path = require("path");
 const fs = require("fs");
 require("dotenv").config();
@@ -16,22 +17,11 @@ const getFilesByBucket = async (req, res) => {
   // } catch (error) {
   //   res.status(500).json({ message: error.message });
   // }
-
-  const s3Client = new S3Client({
-    region:process.env.AWS_DEFAULT_REGION_THIRD,
-    credentials:{
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID_THIRD,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY_THIRD
-    }
-  })
-
-    const bucketName = process.env.AWS_BUCKET_THIRD;
-   
     try{
-      const command = new ListObjectsV2Command({Bucket: bucketName});
-      const response = await s3Client.send(command);
-      if (response.Contents){
-           res.status(200).json({files: response.Contents});
+      const result = await listFiles();
+      if (result && result.length > 0) {
+        console.log("Files in bucket:", result);
+          //res.status(200).json({files: result});
         }else {
           res.status(404).json({message:"No files found in bucket"});
         }
@@ -42,6 +32,20 @@ const getFilesByBucket = async (req, res) => {
     }
   
 };
+
+const getFileURL = async (req,res) => {
+  const key = req.body.key;
+  if (!key) {
+    return res.status(400).json({ message: "Key is required" });
+  }
+  console.log("key ",key);
+  try {
+    const url  = await getObjectURL(key);
+    res.status(200).json({url:url});
+  }catch(error){
+    res.status(500).json({ message: "error geting url"+ error.message });
+  }
+}
 
 const uploadFile = async (req, res) => {
   try {
@@ -94,4 +98,5 @@ module.exports = {
   getFilesByBucket,
   uploadFile,
   deleteFile,
+  getFileURL
 };
