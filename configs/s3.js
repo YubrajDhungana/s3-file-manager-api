@@ -22,7 +22,7 @@ const  getObjectURL = async (key) =>{
 const putObject = async (filename,ContentType) =>{
     const command = new PutObjectCommand({
         Bucket:process.env.AWS_BUCKET_THIRD,
-        key:`/test/s3-filemanager/${filename}`,
+        Key:`/s3-filemanager/${filename}`,
         ContentType:ContentType
     })
 

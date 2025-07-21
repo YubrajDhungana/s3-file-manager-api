@@ -17,6 +17,9 @@ const getFilesByBucket = async (req, res) => {
   // } catch (error) {
   //   res.status(500).json({ message: error.message });
   // }
+
+
+  //get files list from s3 bucket
     try{
       const result = await listFiles();
       if (result && result.length > 0) {
@@ -38,7 +41,6 @@ const getFileURL = async (req,res) => {
   if (!key) {
     return res.status(400).json({ message: "Key is required" });
   }
-  console.log("key ",key);
   try {
     const url  = await getObjectURL(key);
     res.status(200).json({url:url});
@@ -47,51 +49,52 @@ const getFileURL = async (req,res) => {
   }
 }
 
+//getting file upload url
 const uploadFile = async (req, res) => {
   try {
-    if (!req.files) {
+    if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No files were upload" });
     }
-    const { bucketId } = req.body;
 
-    const savedFiles = await Promise.all(
-      req.files.map((file) => {
-        const newFile = new File({
-          name: file.originalname,
-          size: file.size,
-          type: path.extname(file.originalname).substring(1),
-          bucketId,
-          path: file.path,
-          lastModified: new Date(),
-        });
-        return newFile.save();
+    const result = await Promise.all(
+      req.files.map(async (file) => {
+        const filename = file.originalname;
+        const contentType = file.mimetype;
+
+        const uploadURL = await putObject(filename, contentType);
+        if (!uploadURL) {
+          throw new Error("Error getting upload URL");
+        }
+        return {
+          filename: filename,
+          url : uploadURL
+        }
       })
-    );
-    res
-      .status(201)
-      .json({ message: "File uploaded successfully", file: savedFiles });
+    )
+    res.status(200).json({uploads:result});
   } catch (error) {
+    console.log("Error uploading files:", error.message);
     res.status(500).json({ message: error.message });
   }
 };
 
 const deleteFile = async (req, res) => {
-  try {
-    const fileId = req.params.id;
-    const file = await File.findById(fileId);
-    if (!file) {
-      return res.status(404).json({ message: "File not found" });
-    }
+  // try {
+  //   const fileId = req.params.id;
+  //   const file = await File.findById(fileId);
+  //   if (!file) {
+  //     return res.status(404).json({ message: "File not found" });
+  //   }
 
-    //delete file from the system
-    fs.unlinkSync(file.path);
+  //   //delete file from the system
+  //   fs.unlinkSync(file.path);
 
-    //delete file from the database
-    await File.findByIdAndDelete(fileId);
-    res.status(200).json({ message: "File deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  //   //delete file from the database
+  //   await File.findByIdAndDelete(fileId);
+  //   res.status(200).json({ message: "File deleted successfully" });
+  // } catch (error) {
+  //   res.status(500).json({ message: error.message });
+  // }
 };
 
 module.exports = {
