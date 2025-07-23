@@ -25,6 +25,7 @@ const upload = multer();
 // const upload = multer({dest: uploadDir});
 router.get("/", fileController.getFilesByBucket);
 router.get("/file-url", fileController.getFileURL);
+router.get("/list-folders", fileController.listFolders);
 router.get("/listByFolder", fileController.listFilesByFolder);
 router.patch("/rename", fileController.renameFile);
 router.post("/upload", upload.array("files"), fileController.uploadFile);

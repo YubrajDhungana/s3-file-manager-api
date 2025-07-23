@@ -73,6 +73,7 @@ const listFiles = async (limit = 10, continuationToken = null) => {
       lastModified: file.LastModified,
       size: file.Size,
       type: file.ContentType,
+      url:`${process.env.AWS_URL_THIRD}${file.Key}`
     }));
   }
   return result;

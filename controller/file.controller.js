@@ -22,9 +22,7 @@ const getFilesByBucket = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const continuationToken = req.query.continuationToken || null;
     const result = await listFiles(limit, continuationToken);
-    console.log(result);
-    if (result && result.length > 0) {
-      console.log("Files in bucket:", result);
+    if (result.files && result.files.length > 0) {
       res.status(200).json({ files: result });
     } else {
       res.status(404).json({ message: "No files found in bucket" });
@@ -114,24 +112,56 @@ const uploadFile = async (req, res) => {
   }
 };
 
+//list folders
+const listFolders = async (req, res) => {
+  const prefix = req.query.prefix || "";
+  try {
+    const command = new ListObjectsV2Command({
+      Bucket: process.env.AWS_BUCKET_THIRD,
+      Prefix: prefix,
+      Delimiter: "/",
+    });
+    const response = await s3Client.send(command);
+    const folders = response.CommonPrefixes?.map((cp) => cp.Prefix) || [];
+    res.status(200).json({ folders });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Error listing folders: " + error.message });
+  }
+};
+
 //list files by folers
 const listFilesByFolder = async (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  const continuationToken = req.query.continuationToken || null;
   const folder = req.query.folder || "/s3-filemanager/";
   try {
     const command = new ListObjectsV2Command({
       Bucket: process.env.AWS_BUCKET_THIRD,
       Prefix: folder,
+      MaxKeys: limit,
+      ContinuationToken: continuationToken,
     });
 
     const response = await s3Client.send(command);
-    const files =
-      response.Contents?.map((obj) => ({
-        key: obj.Key,
-        size: obj.Size,
-        lastModified: obj.LastModified,
-      })) || [];
+    const result = {
+      files: [],
+      isTruncated: response.IsTruncated,
+      nextContinuationToken: response.NextContinuationToken || null,
+      keyCount: response.KeyCount,
+    };
+    if (response.Contents && response.Contents.length > 0) {
+      result.files = response.Contents.map((file) => ({
+        key: file.Key,
+        lastModified: file.LastModified,
+        size: file.Size,
+        type: file.ContentType,
+        url: `${process.env.AWS_URL_THIRD}${file.Key}`,
+      }));
+    }
 
-    res.status(200).json({ files });
+    res.status(200).json({ files: result });
   } catch (error) {
     res
       .status(500)
@@ -196,4 +226,5 @@ module.exports = {
   getFileURL,
   listFilesByFolder,
   renameFile,
+  listFolders,
 };
