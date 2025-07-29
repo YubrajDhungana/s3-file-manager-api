@@ -249,11 +249,14 @@ const listFilesByFolder = async (req, res) => {
     const response = await s3Client.send(command);
 
     // Folders inside the current folder
-    const folders = (response.CommonPrefixes || []).map((cp) => ({
-      name: cp.Prefix.replace(prefix, "").replace(/\/$/, ""),
-      key: cp.Prefix,
-      type: "folder",
-    }));
+    const folders = (response.CommonPrefixes || []).map((cp) => {
+      const folderName = cp.Prefix.replace(prefix, "").replace(/\/$/, "");
+      return {
+        name: folderName === "" ? "/" : folderName,
+        key: cp.Prefix,
+        type: "folder",
+      };
+    });
 
     // Files directly inside the current folder
     const files = (response.Contents || [])
