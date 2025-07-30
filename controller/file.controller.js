@@ -7,9 +7,8 @@ const {
   CopyObjectCommand,
   DeleteObjectCommand,
 } = require("@aws-sdk/client-s3");
-const { s3Client } = require("../configs/s3");
-const path = require("path");
-const fs = require("fs");
+const { getS3ClientByBucketId } = require("../configs/s3");
+const db = require("../configs/db");
 require("dotenv").config();
 const getFilesByBucket = async (req, res) => {
   //get files list from s3 bucket
@@ -147,8 +146,6 @@ const listFolders = async (req, res) => {
       .json({ message: "Error listing folders: " + error.message });
   }
 };
-
-//list files by folers
 // const listFilesByFolder = async (req, res) => {
 //   const limit = parseInt(req.query.limit) || 10;
 //   const continuationToken = req.query.continuationToken || null;
@@ -231,6 +228,7 @@ const listFolders = async (req, res) => {
 
 const listFilesByFolder = async (req, res) => {
   try {
+    const bucketId = req.params.bucketId;
     const limit = parseInt(req.query.limit) || 10;
     const continuationToken = req.query.continuationToken || null;
     // If no folder is provided, list from the root of the bucket
@@ -238,8 +236,11 @@ const listFilesByFolder = async (req, res) => {
     const prefix =
       folder === "" || folder.endsWith("/") ? folder : folder + "/";
 
+    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
+    const { bucket_name, aws_bucket_url } = bucketConfig;
+
     const command = new ListObjectsV2Command({
-      Bucket: process.env.AWS_BUCKET_THIRD,
+      Bucket: bucket_name,
       Prefix: prefix,
       Delimiter: "/", // Important to separate folders
       MaxKeys: limit,
@@ -267,7 +268,7 @@ const listFilesByFolder = async (req, res) => {
         size: file.Size,
         lastModified: file.LastModified,
         type: "file",
-        url: `${process.env.AWS_URL_THIRD}/${file.Key}`,
+        url: `${aws_bucket_url}/${file.Key}`,
       }));
 
     res.status(200).json({
@@ -283,13 +284,18 @@ const listFilesByFolder = async (req, res) => {
   }
 };
 const deleteFile = async (req, res) => {
+  const bucketId = req.params.bucketId;
   const filePaths = req.body.filePaths;
   if (!filePaths || filePaths.length === 0) {
     return res.status(400).json({ message: "No file selected" });
   }
+
+  const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
+  const { bucket_name } = bucketConfig;
+
   try {
     const params = {
-      Bucket: process.env.AWS_BUCKET_THIRD,
+      Bucket: bucket_name,
       Delete: {
         Objects: filePaths.map((key) => ({ Key: key })),
       },
@@ -306,17 +312,21 @@ const deleteFile = async (req, res) => {
 };
 
 const renameFile = async (req, res) => {
+  const bucketId = req.params.bucketId;
   const { oldKey, newKey } = req.body;
-  const bucketName = process.env.AWS_BUCKET_THIRD;
   try {
+
+    const {s3Client,bucketConfig} = await getS3ClientByBucketId(bucketId);
+    const {bucket_name} = bucketConfig;
+
     const params = {
-      Bucket: bucketName,
-      CopySource: `${bucketName}/${oldKey}`,
+      Bucket: bucket_name,
+      CopySource: `${bucket_name}/${oldKey}`,
       Key: newKey,
     };
 
     const deleteParam = {
-      Bucket: bucketName,
+      Bucket: bucket_name,
       Key: oldKey,
     };
     await s3Client.send(new CopyObjectCommand(params));
@@ -332,6 +342,61 @@ const renameFile = async (req, res) => {
   }
 };
 
+const searchFiles = async (req, res) => {
+  try {
+    const bucketId = req.params.bucketId;
+    const folder = req.query.folder || "";
+    const searchTerm = (req.query.search || "").toLowerCase();
+    const prefix =
+      folder === "" || folder.endsWith("/") ? folder : folder + "/";
+    let continuationToken = null;
+    let matchedFiles = [];
+
+    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
+    const { bucket_name, aws_bucket_url } = bucketConfig;
+
+    // Paginate through all files recursively
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket: bucket_name,
+        Prefix: prefix, // Recursive search inside this folder
+        ContinuationToken: continuationToken,
+      });
+
+      const response = await s3Client.send(command);
+      const files = (response.Contents || [])
+        .filter((file) => file.Key !== prefix) // skip the folder itself
+        .filter((file) => {
+          const fileName = file.Key.split("/").pop(); // extract only filename
+          return fileName.toLowerCase().includes(searchTerm);
+        })
+        .map((file) => ({
+          name: file.Key.replace(prefix, ""), // remove base folder path
+          key: file.Key,
+          size: file.Size,
+          lastModified: file.LastModified,
+          type: "file",
+          url: `${aws_bucket_url}/${file.Key}`,
+        }));
+      matchedFiles = [...matchedFiles, ...files];
+      continuationToken = response.IsTruncated
+        ? response.NextContinuationToken
+        : null;
+    } while (continuationToken); // Continue until all matching files are fetched
+
+    res.status(200).json({
+      path: prefix,
+      items: matchedFiles,
+      isTruncated: false,
+      nextContinuationToken: null,
+      keyCount: matchedFiles.length,
+    });
+  } catch (error) {
+    console.error("Error searching files:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
   getFilesByBucket,
   uploadFile,
@@ -339,4 +404,5 @@ module.exports = {
   listFilesByFolder,
   renameFile,
   listFolders,
+  searchFiles,
 };

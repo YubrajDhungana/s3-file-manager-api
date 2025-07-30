@@ -1,42 +1,15 @@
-module.exports = {
-  accounts: [
-    {
-      id: "account-1",
-      name: "Production Account",
-      accessKey: "AXIt...",
-      region: "us-east-1",
-    },
-    {
-      id: "account-2",
-      name: "Development Account",
-      accessKey: "AXIT...",
-      region: "us-west-2",
-    },
-    {
-      id: "account-3",
-      name: "Staging Account",
-      accessKey: "AXIT...",
-      region: "eu-west-1",
-    },
-  ],
-  buckets: [
-    {
-      id: "bucket-1",
-      name: "production-files",
-      accountId: "account-1",
-      region: "us-east-1",
-    },
-    {
-      id: "bucket-2",
-      name: "dev-uploads",
-      accountId: "account-2",
-      region: "us-west-2",
-    },
-    {
-      id: "bucket-3",
-      name: "staging-data",
-      accountId: "account-3",
-      region: "eu-west-1",
-    },
-  ],
-};
+const mysql = require('mysql2');
+require('dotenv').config();
+
+const pool = mysql.createPool({
+  host:process.env.HOST_NAME,
+  user:process.env.USER_NAME,
+  password:process.env.PASSWORD,
+  database:process.env.DATABASE_NAME,
+  waitForConnections: true, // whether to queue when no connections available
+  connectionLimit: 10, // max number of connections
+  queueLimit: 0, // max queued requests (0 = unlimited)
+  idleTimeout: 60000, // milliseconds a connection can be idle
+}).promise()
+
+module.exports = pool;

@@ -23,11 +23,12 @@ const upload = multer();
 //   },
 // });
 // const upload = multer({dest: uploadDir});
-router.get("/", fileController.getFilesByBucket);
-router.get("/list-folders", fileController.listFolders);
-router.get("/listByFolder", fileController.listFilesByFolder);
-router.patch("/rename", fileController.renameFile);
+//router.get("/", fileController.getFilesByBucket);
+//router.get("/list-folders", fileController.listFolders);
+router.get("/:bucketId/search-files", fileController.searchFiles);
+router.get("/:bucketId/listByFolder", fileController.listFilesByFolder);
+router.patch("/:bucketId/rename", fileController.renameFile);
 router.post("/upload", upload.array("files"), fileController.uploadFile);
-router.delete("/", fileController.deleteFile);
+router.delete("/:bucketId", fileController.deleteFile);
 
 module.exports = router;
