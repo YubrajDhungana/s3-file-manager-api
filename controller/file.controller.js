@@ -10,44 +10,6 @@ const {
 const { getS3ClientByBucketId } = require("../configs/s3");
 const db = require("../configs/db");
 require("dotenv").config();
-const getFilesByBucket = async (req, res) => {
-  //get files list from s3 bucket
-  try {
-    const limit = parseInt(req.query.limit) || 10;
-    const continuationToken = req.query.continuationToken || null;
-
-    const command = new ListObjectsV2Command({
-      Bucket: process.env.AWS_BUCKET_THIRD,
-      MaxKeys: limit,
-      ContinuationToken: continuationToken,
-    });
-
-    const response = await s3Client.send(command);
-    const result = {
-      files: [],
-      isTruncated: response.IsTruncated,
-      nextContinuationToken: response.NextContinuationToken || null,
-      keyCount: response.KeyCount,
-    };
-
-    if (response.Contents && response.Contents.length > 0) {
-      result.files = response.Contents.map((file) => ({
-        key: file.Key,
-        lastModified: file.LastModified,
-        size: file.Size,
-        type: file.ContentType,
-        url: `${process.env.AWS_URL_THIRD}/${file.Key}`,
-      }));
-      res.status(200).json({ files: result });
-    } else {
-      res.status(404).json({ message: "No files found in bucket" });
-    }
-  } catch (error) {
-    console.error("Error listing files:", error);
-    throw error;
-  }
-};
-
 // const getFileURL = async (req, res) => {
 //   const key = req.body.key;
 //   if (!key) {
@@ -96,14 +58,18 @@ const uploadFile = async (req, res) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No files were uploaded" });
     }
+    const bucketId = req.params.bucketId
 
-    const baseKey = req.body.key || "/s3-filemanager/";
+    const {s3Client,bucketConfig} = await getS3ClientByBucketId(bucketId);
+    const {bucket_name,aws_bucket_url} = bucketConfig;
+
+
+    const baseKey = req.body.key || '';
     const uploadFiles = await Promise.all(
       req.files.map(async (file) => {
         const key = `${baseKey}${file.originalname}`;
-        const bucket = process.env.AWS_BUCKET_THIRD;
         const params = {
-          Bucket: bucket,
+          Bucket: bucket_name,
           Key: key,
           Body: file.buffer,
           ContentType: file.mimetype,
@@ -112,7 +78,7 @@ const uploadFile = async (req, res) => {
         await s3Client.send(new PutObjectCommand(params));
         return {
           name: file.originalname,
-          location: `https://${bucket}.s3.amazonaws.com/${key}`,
+          location: `${aws_bucket_url}/${key}`,
           size: file.size,
           contentType: file.mimetype,
         };
@@ -248,6 +214,7 @@ const listFilesByFolder = async (req, res) => {
     });
 
     const response = await s3Client.send(command);
+    console.log(response);
 
     // Folders inside the current folder
     const folders = (response.CommonPrefixes || []).map((cp) => {
@@ -261,7 +228,7 @@ const listFilesByFolder = async (req, res) => {
 
     // Files directly inside the current folder
     const files = (response.Contents || [])
-      .filter((file) => file.Key !== prefix) // skip the folder object itself
+      .filter((file) => file.Key !== prefix) 
       .map((file) => ({
         name: file.Key.replace(prefix, ""),
         key: file.Key,
@@ -365,13 +332,13 @@ const searchFiles = async (req, res) => {
 
       const response = await s3Client.send(command);
       const files = (response.Contents || [])
-        .filter((file) => file.Key !== prefix) // skip the folder itself
+        .filter((file) => file.Key !== prefix) 
         .filter((file) => {
-          const fileName = file.Key.split("/").pop(); // extract only filename
+          const fileName = file.Key.split("/").pop(); 
           return fileName.toLowerCase().includes(searchTerm);
         })
         .map((file) => ({
-          name: file.Key.replace(prefix, ""), // remove base folder path
+          name: file.Key.replace(prefix, ""), 
           key: file.Key,
           size: file.Size,
           lastModified: file.LastModified,
@@ -398,7 +365,6 @@ const searchFiles = async (req, res) => {
 };
 
 module.exports = {
-  getFilesByBucket,
   uploadFile,
   deleteFile,
   listFilesByFolder,
