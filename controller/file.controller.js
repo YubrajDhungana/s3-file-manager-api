@@ -1,4 +1,3 @@
-const File = require("../models/files");
 const {
   S3Client,
   ListObjectsV2Command,
@@ -214,8 +213,6 @@ const listFilesByFolder = async (req, res) => {
     });
 
     const response = await s3Client.send(command);
-    console.log(response);
-
     // Folders inside the current folder
     const folders = (response.CommonPrefixes || []).map((cp) => {
       const folderName = cp.Prefix.replace(prefix, "").replace(/\/$/, "");
