@@ -1,13 +1,21 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const accountRoutes = require("./routes/account.routes");
 const bucketRoutes = require("./routes/bucket.routes");
 const fileRoutes = require("./routes/file.routes");
 const authRoutes = require("./routes/auth.routes");
 
-app.use(cors({ origin: "*" }));
+app.use(
+  cors({
+    origin: "http://localhost:8080",
+    credentials: true,
+    exposedHeaders: ["set-cookie"],
+  })
+);
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api/accounts", accountRoutes);

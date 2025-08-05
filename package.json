@@ -18,6 +18,7 @@
     "@aws-sdk/client-s3": "^3.848.0",
     "@aws-sdk/s3-request-presigner": "^3.848.0",
     "aws-sdk-client-mock": "^4.1.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto-js": "^4.2.0",
     "dotenv": "^17.2.0",
