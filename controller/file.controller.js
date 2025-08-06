@@ -57,13 +57,12 @@ const uploadFile = async (req, res) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No files were uploaded" });
     }
-    const bucketId = req.params.bucketId
+    const bucketId = req.params.bucketId;
 
-    const {s3Client,bucketConfig} = await getS3ClientByBucketId(bucketId);
-    const {bucket_name,aws_bucket_url} = bucketConfig;
+    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
+    const { bucket_name, aws_bucket_url } = bucketConfig;
 
-
-    const baseKey = req.body.key || '';
+    const baseKey = req.body.key || "";
     const uploadFiles = await Promise.all(
       req.files.map(async (file) => {
         const key = `${baseKey}${file.originalname}`;
@@ -73,7 +72,7 @@ const uploadFile = async (req, res) => {
           Body: file.buffer,
           ContentType: file.mimetype,
         };
-
+        console.log("key ", key);
         await s3Client.send(new PutObjectCommand(params));
         return {
           name: file.originalname,
@@ -225,7 +224,7 @@ const listFilesByFolder = async (req, res) => {
 
     // Files directly inside the current folder
     const files = (response.Contents || [])
-      .filter((file) => file.Key !== prefix) 
+      .filter((file) => file.Key !== prefix)
       .map((file) => ({
         name: file.Key.replace(prefix, ""),
         key: file.Key,
@@ -279,9 +278,8 @@ const renameFile = async (req, res) => {
   const bucketId = req.params.bucketId;
   const { oldKey, newKey } = req.body;
   try {
-
-    const {s3Client,bucketConfig} = await getS3ClientByBucketId(bucketId);
-    const {bucket_name} = bucketConfig;
+    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
+    const { bucket_name } = bucketConfig;
 
     const params = {
       Bucket: bucket_name,
@@ -329,13 +327,13 @@ const searchFiles = async (req, res) => {
 
       const response = await s3Client.send(command);
       const files = (response.Contents || [])
-        .filter((file) => file.Key !== prefix) 
+        .filter((file) => file.Key !== prefix)
         .filter((file) => {
-          const fileName = file.Key.split("/").pop(); 
+          const fileName = file.Key.split("/").pop();
           return fileName.toLowerCase().includes(searchTerm);
         })
         .map((file) => ({
-          name: file.Key.replace(prefix, ""), 
+          name: file.Key.replace(prefix, ""),
           key: file.Key,
           size: file.Size,
           lastModified: file.LastModified,

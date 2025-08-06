@@ -6,14 +6,15 @@ const fileController = require("../controller/file.controller");
 const upload = multer();
 
 //router.get("/list-folders", fileController.listFolders);
-router.get("/:bucketId/search-files", fileController.searchFiles);
+router.get("/:bucketId/search-files",authMiddleware, fileController.searchFiles);
 router.get("/:bucketId/listByFolder",authMiddleware, fileController.listFilesByFolder);
-router.patch("/:bucketId/rename", fileController.renameFile);
+router.patch("/:bucketId/rename", authMiddleware, fileController.renameFile);
 router.post(
   "/:bucketId/upload",
   upload.array("files"),
+  authMiddleware,
   fileController.uploadFile
 );
-router.delete("/:bucketId", fileController.deleteFile);
+router.delete("/:bucketId", authMiddleware, fileController.deleteFile);
 
 module.exports = router;

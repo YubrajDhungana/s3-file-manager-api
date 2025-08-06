@@ -4,8 +4,7 @@ require("dotenv").config();
 const loginCheck = async (req, res) => {
   try {
     console.log("login check called");
-    // Add debugging to see what's being received
-    console.log("Request body:", req.body);
+  
     const email = req.body.email;
     const password = req.body.password;
     if (!email || !password) {
@@ -28,17 +27,18 @@ const loginCheck = async (req, res) => {
     const token = jwt.sign(
       {
         id: user.id,
+        name:user.name,
         email: user.email,
       },
       process.env.SECRET_KEY,
-      { expiresIn: "5m" }
+      { expiresIn: "1hr" }
     );
-    res.cookie('token',token,{
+    res.cookie("token", token, {
       httpOnly: true,
-      sameSite:'lax',
-      secure: false, 
-      maxAge: 50 * 60 * 1000, 
-    })
+      sameSite: "lax",
+      secure: false,
+      maxAge: 50 * 60 * 1000,
+    });
     res.status(200).json({
       message: "login successfull",
       user: {
@@ -53,34 +53,29 @@ const loginCheck = async (req, res) => {
   }
 };
 
-const authcheck = (req,res)=>{
+const authcheck = (req, res) => {
+  console.log("auth check called");
   res.status(200).json({
-    authenticated:true,
-    user:{
-      user: {
-      id: req.user.id,
-      email: req.user.email
-    }
-    }
-  })
-}
-
-
-const logout = async (req,res)=>{
-  try{
-    res.clearCookie('token',{
+    authenticated: true,
+    name: req.user.name,
+    email: req.user.email,
+  });
+};
+const logout = async (req, res) => {
+  try {
+    res.clearCookie("token", {
       httpOnly: true,
-      sameSite:'lax',
-      secure: false, 
-    })
+      sameSite: "lax",
+      secure: false,
+    });
     res.status(200).json({ message: "Logged out successfully" });
-  }catch{
+  } catch {
     res.status(500).json({ message: "Error during logout" });
   }
-}
+};
 
 module.exports = {
   loginCheck,
   authcheck,
-  logout
+  logout,
 };
