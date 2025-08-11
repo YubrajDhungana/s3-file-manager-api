@@ -1,9 +1,8 @@
 const db = require("../configs/db");
-const {decrypt}  = require("../utils/cryptoUtils");
+const { decrypt } = require("../utils/cryptoUtils");
 const getAccounts = async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT id, account_name FROM buckets");
-    console.log("rows", rows);
+    const [rows] = await db.query("SELECT id, account_name FROM aws_accounts");
     const account = rows.map((row) => ({
       id: row.id,
       account_name: decrypt(row.account_name),
