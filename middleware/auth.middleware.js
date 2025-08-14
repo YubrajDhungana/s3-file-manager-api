@@ -1,15 +1,22 @@
 const jwt = require("jsonwebtoken");
+const db = require("../configs/db");
 require("dotenv").config();
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   try {
     const token = req.cookies.token;
     if (!token) {
       return res.status(401).json({ message: "Token missing from cookie" });
     }
-
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
     if (!decoded) {
       return res.status(401).json({ message: "Invalid token" });
+    }
+    const [rows] = await db.query(
+      "SELECT is_revoked from auth_tokens WHERE jti= ? AND expires_at >NOW()",
+      [decoded.jti]
+    );
+    if (rows.length === 0 || rows[0].is_revoked) {
+      return res.status(401).json({ message: "Token revoked or expired" });
     }
     req.user = decoded;
     next();

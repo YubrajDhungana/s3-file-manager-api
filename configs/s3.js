@@ -30,15 +30,6 @@ const getS3ClientByBucketId = async (bucketId) => {
     const bucket_name = decrypt(rows[0].bucket_alias);
     const aws_bucket_url = decrypt(rows[0].aws_bucket_url);
 
-    console.log(
-      "s3 client config",
-      access_key_id,
-      secret_access_key,
-      region,
-      bucket_name,
-      aws_bucket_url
-    );
-
     if (!access_key_id || !secret_access_key || !region || !bucket_name) {
       throw new Error(
         "Missing required AWS credentials or configuration in database"

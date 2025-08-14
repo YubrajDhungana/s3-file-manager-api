@@ -1,5 +1,4 @@
 const {
-  S3Client,
   ListObjectsV2Command,
   PutObjectCommand,
   DeleteObjectsCommand,
@@ -93,23 +92,23 @@ const uploadFile = async (req, res) => {
 };
 
 //list folders
-const listFolders = async (req, res) => {
-  const prefix = req.query.prefix || "";
-  try {
-    const command = new ListObjectsV2Command({
-      Bucket: process.env.AWS_BUCKET_THIRD,
-      Prefix: prefix,
-      Delimiter: "/",
-    });
-    const response = await s3Client.send(command);
-    const folders = response.CommonPrefixes?.map((cp) => cp.Prefix) || [];
-    res.status(200).json({ folders });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Error listing folders: " + error.message });
-  }
-};
+// const listFolders = async (req, res) => {
+//   const prefix = req.query.prefix || "";
+//   try {
+//     const command = new ListObjectsV2Command({
+//       Bucket: process.env.AWS_BUCKET_THIRD,
+//       Prefix: prefix,
+//       Delimiter: "/",
+//     });
+//     const response = await s3Client.send(command);
+//     const folders = response.CommonPrefixes?.map((cp) => cp.Prefix) || [];
+//     res.status(200).json({ folders });
+//   } catch (error) {
+//     return res
+//       .status(500)
+//       .json({ message: "Error listing folders: " + error.message });
+//   }
+// };
 // const listFilesByFolder = async (req, res) => {
 //   const limit = parseInt(req.query.limit) || 10;
 //   const continuationToken = req.query.continuationToken || null;
@@ -233,7 +232,6 @@ const listFilesByFolder = async (req, res) => {
         type: "file",
         url: `${aws_bucket_url}/${file.Key}`,
       }));
-
     res.status(200).json({
       path: prefix,
       items: [...folders, ...files],
@@ -364,6 +362,6 @@ module.exports = {
   deleteFile,
   listFilesByFolder,
   renameFile,
-  listFolders,
+  //listFolders,
   searchFiles,
 };
