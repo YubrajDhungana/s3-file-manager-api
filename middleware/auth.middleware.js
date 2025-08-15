@@ -5,7 +5,7 @@ const authMiddleware = async (req, res, next) => {
   try {
     const token = req.cookies.token;
     if (!token) {
-      return res.status(401).json({ message: "Token missing from cookie" });
+      return res.status(401).json({ message: "Invalid token" });
     }
     const decoded = jwt.verify(token, process.env.SECRET_KEY);
     if (!decoded) {
@@ -16,7 +16,7 @@ const authMiddleware = async (req, res, next) => {
       [decoded.jti]
     );
     if (rows.length === 0 || rows[0].is_revoked) {
-      return res.status(401).json({ message: "Token revoked or expired" });
+      return res.status(401).json({ message: "Token revoked" });
     }
     req.user = decoded;
     next();

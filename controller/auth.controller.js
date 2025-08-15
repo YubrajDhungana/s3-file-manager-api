@@ -4,8 +4,6 @@ const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 const loginCheck = async (req, res) => {
   try {
-    console.log("login check called");
-
     const email = req.body.email;
     const password = req.body.password;
     if (!email || !password) {
@@ -43,8 +41,6 @@ const loginCheck = async (req, res) => {
       "INSERT INTO auth_tokens (user_id, jti, expires_at) VALUES (?, ?, ?)",
       [user.id, jti, expiresAt]
     );
-
-    console.log("jwt token", token);
     res.cookie("token", token, {
       httpOnly: true,
       sameSite: "lax",
@@ -74,7 +70,6 @@ const authcheck = (req, res) => {
 };
 
 const logout = async (req, res) => {
-  console.log("logout api hit");
   try {
     const token = req.cookies.token;
     if (token) {
