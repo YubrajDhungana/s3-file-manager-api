@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const {generalLimiter} = require('./middleware/limiter')
 const accountRoutes = require("./routes/account.routes");
 const bucketRoutes = require("./routes/bucket.routes");
 const fileRoutes = require("./routes/file.routes");
@@ -14,10 +15,11 @@ app.use(
     exposedHeaders: ["set-cookie"],
   })
 );
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
-
+app.use(generalLimiter);
 app.use("/api/accounts", accountRoutes);
 app.use("/api/buckets", bucketRoutes);
 app.use("/api/files", fileRoutes);

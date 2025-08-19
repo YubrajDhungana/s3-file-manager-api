@@ -85,7 +85,8 @@ const logout = async (req, res) => {
       secure: false,
     });
     res.status(200).json({ message: "Logged out successfully" });
-  } catch {
+  } catch(error) {
+    console.error("Error during logout:", error);
     res.status(500).json({ message: "Error during logout" });
   }
 };
