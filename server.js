@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const {generalLimiter} = require('./middleware/limiter')
+const { generalLimiter } = require("./middleware/limiter");
 const accountRoutes = require("./routes/account.routes");
 const bucketRoutes = require("./routes/bucket.routes");
 const fileRoutes = require("./routes/file.routes");
@@ -25,4 +25,4 @@ app.use("/api/buckets", bucketRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/auth", authRoutes);
 
-app.listen(3000, () => console.log("server is running on port 3000"));
+app.listen(3060, () => console.log("server is running on port 3060"));

@@ -1,9 +1,8 @@
-
 services:
   backend:
     build: .
     ports:
-      - "3000:3000"
+      - "3060:3060"
     environment:
       - HOST_NAME=mysql
       - USER_NAME=root
