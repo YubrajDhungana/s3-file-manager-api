@@ -1,0 +1,30 @@
+
+services:
+  backend:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - HOST_NAME=mysql
+      - USER_NAME=root
+      - PASSWORD=password
+      - DATABASE_NAME=s3_db
+      - SECRET_ENC_KEY=045b33bfbf15a32f154443b2246cde9d7fb0f591ad89a897068b91527a635de3
+      - SECRET_KEY=045b33bfbf15a32f154443b2246cde9d7fb0f591ad89a897068b91527a635de3
+    depends_on:
+      - mysql
+    restart: always
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=s3_db
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./s3_db.sql:/docker-entrypoint-initdb.d/s3_db.sql
+    ports:
+      - "3306:3306"
+    restart: always
+
+volumes:
+  mysql_data:
