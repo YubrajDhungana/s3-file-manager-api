@@ -4,6 +4,8 @@ const {
   DeleteObjectsCommand,
   CopyObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
+  GetObjectCommand
 } = require("@aws-sdk/client-s3");
 const { getS3ClientByBucketId } = require("../configs/s3");
 const db = require("../configs/db");
@@ -49,6 +51,44 @@ const uploadFile = async (req, res) => {
     res.status(500).json({ message: "Error uploading file: " + error.message });
   }
 };
+
+const downloadFile = async (req, res) => {
+  try{
+    const bucketId = req.params.bucketId
+    const{ key } = req.query
+    if(!key){
+      res.status(400).json({message:"File key is required"})
+    }
+
+    const {s3Client, bucketConfig} = await getS3ClientByBucketId(bucketId);
+    const {bucket_name} = bucketConfig;
+
+    const headObject = new HeadObjectCommand({
+      Bucket:bucket_name,
+      Key:key
+    })
+
+    const headResponse = await  s3Client.send(headObject);
+
+    // Set appropriate headers
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(key)}"`);
+    res.setHeader('Content-Type', headResponse.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Length', headResponse.ContentLength);
+    res.setHeader('Last-Modified', headResponse.LastModified.toUTCString());
+    res.setHeader('ETag', headResponse.ETag);
+
+    const command = new GetObjectCommand({
+      Bucket:bucket_name,
+      Key:key
+    })
+
+    const response  = await s3Client.send(command);
+    response.Body.pipe(res);
+  }catch(error){
+    console.error("Error downloading file:", error);
+    res.status(500).json({message:"Internal server error"});
+  }
+}
 
 const listFilesByFolder = async (req, res) => {
   try {
@@ -224,4 +264,5 @@ module.exports = {
   listFilesByFolder,
   renameFile,
   searchFiles,
+  downloadFile
 };

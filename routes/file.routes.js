@@ -1,13 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const authMiddleware = require("../middleware/auth.middleware")
+const authMiddleware = require("../middleware/auth.middleware");
 const fileController = require("../controller/file.controller");
 const upload = multer();
 
 //router.get("/list-folders", fileController.listFolders);
-router.get("/:bucketId/search-files",authMiddleware, fileController.searchFiles);
-router.get("/:bucketId/listByFolder",authMiddleware, fileController.listFilesByFolder);
+router.get(
+  "/:bucketId/search-files",
+  authMiddleware,
+  fileController.searchFiles
+);
+router.get(
+  "/:bucketId/listByFolder",
+  authMiddleware,
+  fileController.listFilesByFolder
+);
 router.patch("/:bucketId/rename", authMiddleware, fileController.renameFile);
 router.post(
   "/:bucketId/upload",
@@ -16,5 +24,5 @@ router.post(
   fileController.uploadFile
 );
 router.delete("/:bucketId", authMiddleware, fileController.deleteFile);
-
+router.get('/:bucketId/download',authMiddleware,fileController.downloadFile);
 module.exports = router;

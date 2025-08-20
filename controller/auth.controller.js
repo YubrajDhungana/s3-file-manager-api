@@ -48,13 +48,7 @@ const loginCheck = async (req, res) => {
       maxAge: 60 * 60 * 1000,
     });
     res.status(200).json({
-      message: "login successfull",
-      user: {
-        name: user.name,
-        email: user.email,
-      },
-      token: token,
-    });
+      message: "login successfull"});
   } catch (error) {
     console.log("an error occurred while login check ", error);
     res.status(500).json({ message: "Internal server error" });
@@ -85,7 +79,7 @@ const logout = async (req, res) => {
       secure: false,
     });
     res.status(200).json({ message: "Logged out successfully" });
-  } catch(error) {
+  } catch (error) {
     console.error("Error during logout:", error);
     res.status(500).json({ message: "Error during logout" });
   }
