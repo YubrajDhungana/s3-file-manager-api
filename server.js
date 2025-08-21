@@ -13,7 +13,7 @@ app.set("trust proxy", 1);
 
 app.use(
   cors({
-    origin: "http://bucketmanager.cloudtechservice.com", // frontend URL
+    origin: "https://bucketmanager.cloudtechservice.com", // frontend URL
     credentials: true,
     exposedHeaders: ["set-cookie"],
   })
