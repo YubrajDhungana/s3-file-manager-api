@@ -4,7 +4,7 @@ services:
   backend:
     build: .
     ports:
-      - "3060:3060"
+      - "3060:3060"   # host:container
     environment:
       - HOST_NAME=mysql
       - USER_NAME=root
@@ -12,6 +12,7 @@ services:
       - DATABASE_NAME=s3_db
       - SECRET_ENC_KEY=045b33bfbf15a32f154443b2246cde9d7fb0f591ad89a897068b91527a635de3
       - SECRET_KEY=045b33bfbf15a32f154443b2246cde9d7fb0f591ad89a897068b91527a635de3
+    command: node server.js --host 0.0.0.0 --port 3060
     depends_on:
       - mysql
     restart: always
@@ -25,8 +26,9 @@ services:
       - mysql_data:/var/lib/mysql
       - ./s3_db.sql:/docker-entrypoint-initdb.d/s3_db.sql
     ports:
-      - "3307:3306"
+      - "3307:3306"  # host:container
     restart: always
 
 volumes:
   mysql_data:
+ 
