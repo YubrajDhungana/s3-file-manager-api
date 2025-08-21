@@ -8,9 +8,12 @@ const bucketRoutes = require("./routes/bucket.routes");
 const fileRoutes = require("./routes/file.routes");
 const authRoutes = require("./routes/auth.routes");
 
+// TRUST PROXY
+app.set("trust proxy", 1);
+
 app.use(
   cors({
-    origin: "http://localhost:8080",
+    origin: "http://bucketmanager.cloudtechservice.com", // frontend URL
     credentials: true,
     exposedHeaders: ["set-cookie"],
   })
