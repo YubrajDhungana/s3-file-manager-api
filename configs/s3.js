@@ -1,6 +1,7 @@
 const { S3Client } = require("@aws-sdk/client-s3");
 const db = require("./db");
 const { encrypt, decrypt } = require("../utils/cryptoUtils");
+const bcrypt = require('bcrypt');
 require("dotenv").config();
 const getS3ClientByBucketId = async (bucketId) => {
   if (!bucketId) {
@@ -96,8 +97,20 @@ const saveAccountcredentials = async (accountData) => {
   }
 };
 
+const saveUserCredentials = async (userData)=>{
+  try{
+    const salt = await bcrypt.genSalt(10);
+    userData.password = await bcrypt.hash(userData.password,salt);
+    const [result] = await db.query("INSERT INTO user SET ?", [userData]);
+    return result;
+  }catch(error){
+    console.log("Error saving user credentials", error);
+  }
+}
+
 module.exports = {
   getS3ClientByBucketId,
   saveBucketCredentials,
   saveAccountcredentials,
+  saveUserCredentials,
 };

@@ -1,5 +1,6 @@
 const db = require("../configs/db");
 const jwt = require("jsonwebtoken");
+const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 const loginCheck = async (req, res) => {
@@ -12,8 +13,8 @@ const loginCheck = async (req, res) => {
         .json({ message: "Email and password are required" });
     }
     const [rows] = await db.query(
-      "SELECT * FROM user WHERE email = ? and password = ?",
-      [email, password]
+      "SELECT * FROM user WHERE email = ?",
+      [email]
     );
     if (!rows || rows.length === 0) {
       return res.status(401).json({ message: "Invalid email or password" });
@@ -23,6 +24,12 @@ const loginCheck = async (req, res) => {
       return res.status(401).json({ message: "you are not allowed to login" });
     }
     const user = rows[0];
+    const isPasswordValid = await bcrypt.compare(password,user.password);
+
+    if(!isPasswordValid){
+      return res.status(401).json({message:"Invalid email or password"});
+    }
+    
     const jti = uuidv4();
     const expiresIn = "1hr";
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);

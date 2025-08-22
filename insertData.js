@@ -1,6 +1,7 @@
 const {
   saveBucketCredentials,
   saveAccountcredentials,
+  saveUserCredentials
 } = require("./configs/s3");
 require("dotenv").config();
 
@@ -34,5 +35,19 @@ const insertAccountData = async () => {
   }
 };
 
+const insertUserData = async () =>{
+    const userData = {
+      name: '',
+      email:'',
+      password:'',
+    }
+    try{
+      const res= await saveUserCredentials(userData);
+      console.log("user created successfully:", res);
+    }catch(error){
+      console.log("Error inserting user data:", error);
+    }
+}
 //insertAccountData();
-insertBucketData();
+//insertBucketData();
+insertUserData();
