@@ -7,6 +7,7 @@ const accountRoutes = require("./routes/account.routes");
 const bucketRoutes = require("./routes/bucket.routes");
 const fileRoutes = require("./routes/file.routes");
 const authRoutes = require("./routes/auth.routes");
+const roleRoutes = require("./routes/role.routes");
 
 // TRUST PROXY
 app.set("trust proxy", 1);
@@ -27,5 +28,6 @@ app.use("/api/accounts", accountRoutes);
 app.use("/api/buckets", bucketRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/roles", roleRoutes);
 
 app.listen(3060, () => console.log("server is running on port 3060"));
