@@ -8,14 +8,12 @@ const createRole = async (req, res) => {
   }
 
   try {
-    const [result] = await db.query(
-      "INSERT INTO roles (name) VALUES (?)",
-      [name]
-    );
+    const [result] = await db.query("INSERT INTO roles (name) VALUES (?)", [
+      name,
+    ]);
 
     res.status(201).json({
-      message: "Role created successfully",
-      role: { id: result.insertId, name },
+      message: "Role created successfully"
     });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
@@ -30,19 +28,17 @@ const createRole = async (req, res) => {
 
 const getAllRoles = async (req, res) => {
   try {
-    const [roles] = await db.query(
-      "SELECT id, name FROM roles ORDER BY name"
-    );
+    const [roles] = await db.query("SELECT id, name FROM roles ORDER BY name");
 
     res.status(200).json({
       message: "Roles retrieved successfully",
-      data: roles
+      data: roles,
     });
   } catch (error) {
     console.error("Error fetching roles:", error);
     res.status(500).json({
       success: false,
-      message: "Internal server error"
+      message: "Internal server error",
     });
   }
 };
@@ -88,6 +84,16 @@ const assignRoleToUser = async (req, res) => {
       return res.status(404).json({ message: "Role not found" });
     }
 
+    const [row] = await db.query(
+      "SELECT COUNT(0)>0 AS is_present from user_roles where user_id=?", [userId,roleId]
+    );
+    console.log("role assigned: ", row[0].is_present);
+    if (row[0].is_present) {
+      return res
+        .status(409)
+        .json({ message: "user already has a role assigned" });
+    }
+
     await db.query(
       `INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)`,
       [userId, roleId]
@@ -100,9 +106,9 @@ const assignRoleToUser = async (req, res) => {
   }
 };
 
-module.exports={
-    createRole,
-    assignBucketToRole,
-    assignRoleToUser,
-    getAllRoles
-}
+module.exports = {
+  createRole,
+  assignBucketToRole,
+  assignRoleToUser,
+  getAllRoles,
+};

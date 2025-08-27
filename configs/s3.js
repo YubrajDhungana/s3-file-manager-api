@@ -79,7 +79,6 @@ const saveBucketCredentials = async (bucketData) => {
 
 const saveAccountcredentials = async (accountData) => {
   try {
-    console.log(accountData);
     const encryptedData = {
       account_name: encrypt(accountData.account_name),
       access_key_id: encrypt(accountData.access_key_id),
