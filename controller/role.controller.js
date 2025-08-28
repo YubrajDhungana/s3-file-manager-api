@@ -14,7 +14,7 @@ const createRole = async (req, res) => {
 
     res.status(201).json({
       message: "Role created successfully"
-    });
+    }); 
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
       return res
@@ -87,7 +87,6 @@ const assignRoleToUser = async (req, res) => {
     const [row] = await db.query(
       "SELECT COUNT(0)>0 AS is_present from user_roles where user_id=?", [userId,roleId]
     );
-    console.log("role assigned: ", row[0].is_present);
     if (row[0].is_present) {
       return res
         .status(409)

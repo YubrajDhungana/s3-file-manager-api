@@ -1,5 +1,38 @@
 const db = require("../configs/db");
 const { decrypt } = require("../utils/cryptoUtils");
+const { S3Client, ListBucketsCommand } = require("@aws-sdk/client-s3");
+
+const listBucketsFromS3 = async (req, res) => {
+  const accountId = req.params.id;
+  try {
+    const [rows] = await db.query(
+      "SELECT access_key_id,secret_access_key, region FROM aws_accounts WHERE id = ?",
+      [accountId]
+    );
+    if (!rows || rows.length === 0) {
+      return res
+        .status(404)
+        .json({ message: `Account with ID ${accountId} not found` });
+    }
+    const access_key_id = decrypt(rows[0].access_key_id);
+    const secret_access_key = decrypt(rows[0].secret_access_key);
+    const region = decrypt(rows[0].region);
+
+    const s3Client = new S3Client({
+      region: region,
+      credentials: {
+        accessKeyId: access_key_id,
+        secretAccessKey: secret_access_key,
+      },
+    });
+
+    const data = await s3Client.send(new ListBucketsCommand({}));
+    res.status(200).json(data.Buckets);
+  } catch (error) {
+    console.error("Error listing buckets", err);
+    res.status(500).json({ error: "Failed to list buckets" });
+  }
+};
 
 const listBuckets = async (req, res) => {
   try {
@@ -16,7 +49,6 @@ const listBuckets = async (req, res) => {
         .status(403)
         .json({ message: "Unauthorized: No roles assigned" });
     }
-
     //check if it is admin
     const [result] = await db.query("SELECT name FROM roles where id=?", [
       roleId[0].role_id,
@@ -31,8 +63,6 @@ const listBuckets = async (req, res) => {
         id: row.id,
         bucket_name: decrypt(row.bucket_alias),
       }));
-
-      console.log("admin accessible buckets", buckets);
 
       return res.status(200).json(buckets);
     }
@@ -62,4 +92,4 @@ const listBuckets = async (req, res) => {
   }
 };
 
-module.exports = { listBuckets };
+module.exports = { listBuckets,listBucketsFromS3 };
