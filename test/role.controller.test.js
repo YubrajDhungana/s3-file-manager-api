@@ -1,7 +1,6 @@
 const e = require("express");
 const db = require("../configs/db");
 const roleController = require("../controller/role.controller");
-const { param } = require("../routes/role.routes");
 
 jest.mock("../configs/db", () => ({
   query: jest.fn(),
@@ -122,9 +121,12 @@ describe("assign buckets to role", () => {
   beforeEach(() => {
     req = {
       params: {
-        roleId: 4,
-        bucketId: 789,
+        roleId: 456,
+        accountId:789
       },
+      body:{
+        bucketName:"test_bucket"
+      }
     };
     res = {
       status: jest.fn().mockReturnThis(),
@@ -145,6 +147,15 @@ describe("assign buckets to role", () => {
     });
   });
 
+   it("should return 400 if bucket name is missing", async () => {
+    req.body.bucketName = "";
+    await roleController.assignBucketToRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Bucket name is required",
+    });
+  });
+
   it("should return 404 on role not found", async () => {
     req.params.roleId = 999;
     req.params.bucketId = 789;
@@ -157,22 +168,22 @@ describe("assign buckets to role", () => {
     });
   });
 
-  it("should return 404 on bucket not found", async () => {
+  it("should return 404 on account not found", async () => {
     req.params.roleId = 456;
-    req.params.bucketId = 999;
+    req.params.accountId = 999;
     db.query.mockResolvedValueOnce([[{ id: 456 }]]);
     db.query.mockResolvedValueOnce([[]]);
 
     await roleController.assignBucketToRole(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({
-      message: "Bucket not found",
+      message: "Account not found",
     });
   });
 
   it("should return 201 on duplicate bucket assignment", async () => {
     req.params.roleId = 456;
-    req.params.bucketId = 789;
+    req.params.accountId = 789;
     db.query.mockResolvedValueOnce([[{ id: 456 }]]);
     db.query.mockResolvedValueOnce([[{ id: 789 }]]);
     db.query.mockResolvedValueOnce([{ affectedRows: 0 }]);

@@ -1,6 +1,7 @@
 const bucketController = require("../controller/bucket.controller");
 const db = require("../configs/db");
 const { decrypt } = require("../utils/cryptoUtils");
+const { S3Client, ListBucketsCommand } = require("@aws-sdk/client-s3");
 
 jest.mock("../configs/db", () => ({
   query: jest.fn(),
@@ -9,8 +10,14 @@ jest.mock("../utils/cryptoUtils", () => ({
   decrypt: jest.fn(),
 }));
 
+jest.mock("@aws-sdk/client-s3", () => ({
+  S3Client: jest.fn(),
+  ListBucketsCommand: jest.fn(),
+}));
+
 describe("listBuckets", () => {
   let mockReq, mockRes;
+  let mockS3Send;
   beforeEach(() => {
     mockReq = {
       user: { id: 1 },
@@ -20,6 +27,12 @@ describe("listBuckets", () => {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
+
+    mockS3Send = jest.fn();
+    S3Client.mockImplementation(() => ({
+      send: mockS3Send,
+    }));
+
     jest.clearAllMocks();
   });
 
@@ -39,48 +52,58 @@ describe("listBuckets", () => {
       .mockResolvedValueOnce([[{ role_id: 1 }]])
       .mockResolvedValueOnce([[{ name: "admin" }]]);
 
-    const mockBuckets = [
-      { id: 1, bucket_alias: "encrypted-bucket-1" },
-      { id: 2, bucket_alias: "encrypted-bucket-2" },
-    ];
-
-    db.query.mockResolvedValueOnce([mockBuckets]);
+    db.query.mockResolvedValueOnce([[
+      { 
+        access_key_id: "encrypted-access-key", 
+        secret_access_key: "encrypted-secret-key", 
+        region: "encrypted-region" 
+      }
+    ]]);
 
     decrypt
-      .mockReturnValueOnce("decrypted-bucket-1")
-      .mockReturnValueOnce("decrypted-bucket-2");
+      .mockReturnValueOnce("decrypted-access-key")
+      .mockReturnValueOnce("decrypted-secret-key")
+      .mockReturnValueOnce("decrypted-region");
+
+    // Mock S3 response
+    mockS3Send.mockResolvedValueOnce({
+      Buckets: [
+        { Name: "bucket-1" },
+        { Name: "bucket-2" }
+      ]
+    });
 
     await bucketController.listBuckets(mockReq, mockRes);
-    expect(mockRes.status).toHaveBeenCalledWith(200);
+   expect(mockRes.status).toHaveBeenCalledWith(200);
     expect(mockRes.json).toHaveBeenCalledWith([
-      { id: 1, bucket_name: "decrypted-bucket-1" },
-      { id: 2, bucket_name: "decrypted-bucket-2" },
+      { bucket_name: "bucket-1" },
+      { bucket_name: "bucket-2" }
     ]);
   });
 
-  it("Admin user- but buckets in the accounts, should return empty array", async () => {
+  it("Admin user- but account not found,should return 404", async () => {
     db.query.mockResolvedValueOnce([[{ role_id: 1 }]]);
     db.query.mockResolvedValueOnce([[{ name: "admin" }]]);
     db.query.mockResolvedValueOnce([[]]);
 
     await bucketController.listBuckets(mockReq, mockRes);
-    expect(mockRes.status).toHaveBeenCalledWith(200);
-    expect(mockRes.json).toHaveBeenCalledWith([]);
+    expect(mockRes.status).toHaveBeenCalledWith(404);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "Account with ID 123 not found"
+    });
   });
 
   it("Regular user with role access - should return assigned buckets", async () => {
     db.query.mockResolvedValueOnce([[{ role_id: 2 }]]);
     db.query.mockResolvedValueOnce([[{ name: "user" }]]);
     db.query.mockResolvedValueOnce([
-      [{ id: 3, bucket_alias: "encrypted-bucket-3" }],
+      [{bucket_name: "test-bucket"}],
     ]);
-
-    decrypt.mockReturnValueOnce("decrypted-bucket-3");
 
     await bucketController.listBuckets(mockReq, mockRes);
     expect(mockRes.status).toHaveBeenCalledWith(200);
     expect(mockRes.json).toHaveBeenCalledWith([
-      { id: 3, bucket_name: "decrypted-bucket-3" },
+      { bucket_name: "test-bucket" },
     ]);
   });
 
@@ -92,7 +115,7 @@ describe("listBuckets", () => {
     await bucketController.listBuckets(mockReq, mockRes);
     expect(mockRes.status).toHaveBeenCalledWith(403);
     expect(mockRes.json).toHaveBeenCalledWith({
-      message: "Unauthorized: No buckets accessible for your roles",
+      message: "No buckets accessible for your roles",
     });
   });
 });

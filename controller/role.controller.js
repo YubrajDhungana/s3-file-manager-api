@@ -13,8 +13,8 @@ const createRole = async (req, res) => {
     ]);
 
     res.status(201).json({
-      message: "Role created successfully"
-    }); 
+      message: "Role created successfully",
+    });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
       return res
@@ -44,26 +44,31 @@ const getAllRoles = async (req, res) => {
 };
 
 const assignBucketToRole = async (req, res) => {
-  const { roleId, bucketId } = req.params;
+  const roleId = req.params.roleId;
+  const accountId = req.params.accoundId;
+  const bucketName = req.body.bucketName;
   try {
+    if (!bucketName) {
+      return res.status(400).json({ message: "Bucket name is required" });
+    }
+
     const [role] = await db.query("SELECT * FROM roles WHERE id = ?", [roleId]);
     if (role.length === 0) {
       return res.status(404).json({ message: "Role not found" });
     }
 
-    const [bucket] = await db.query("SELECT * FROM aws_buckets WHERE id = ?", [
-      bucketId,
+    const [accounts] = await db.query("SELECT * FROM aws_accounts where id=?", [
+      accountId,
     ]);
-    if (bucket.length === 0) {
-      return res.status(404).json({ message: "Bucket not found" });
+    if (accounts.length === 0) {
+      return res.status(404).json({ message: "Account not found" });
     }
 
     // avoid duplicate assignment
     await db.query(
-      `INSERT IGNORE INTO role_buckets (role_id, bucket_id) VALUES (?, ?)`,
-      [roleId, bucketId]
+      `INSERT IGNORE INTO role_buckets (role_id,account_id,bucket_alias) VALUES (?,?,?)`,
+      [roleId, accountId, bucketName]
     );
-
     res.status(201).json({ message: "Bucket assigned to role successfully" });
   } catch (error) {
     console.error("Error assigning bucket to role:", error);
@@ -85,7 +90,8 @@ const assignRoleToUser = async (req, res) => {
     }
 
     const [row] = await db.query(
-      "SELECT COUNT(0)>0 AS is_present from user_roles where user_id=?", [userId,roleId]
+      "SELECT COUNT(0)>0 AS is_present from user_roles where user_id=?",
+      [userId, roleId]
     );
     if (row[0].is_present) {
       return res

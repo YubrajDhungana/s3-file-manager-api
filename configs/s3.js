@@ -58,6 +58,38 @@ const getS3ClientByBucketId = async (bucketId) => {
   }
 };
 
+const getS3Client = async (accountId)=>{
+  if(!accountId){
+    throw new Error(`AccountId is required`)
+  }
+
+  const [rows] = await db.query(
+      "SELECT access_key_id,secret_access_key, region FROM aws_accounts WHERE id = ?",
+      [accountId]
+    );
+    
+    if (!rows || rows.length === 0) {
+      throw new Error(`Account with ID ${accountId} not found`);
+    }
+
+    const access_key_id = decrypt(rows[0].access_key_id);
+    const secret_access_key = decrypt(rows[0].secret_access_key);
+    const region = decrypt(rows[0].region);
+
+    const s3Client = new S3Client({
+      region: region,
+      credentials: {
+        accessKeyId: access_key_id,
+        secretAccessKey: secret_access_key,
+      },
+    });
+    
+    return { s3Client,region };
+
+} 
+
+
+
 const saveBucketCredentials = async (bucketData) => {
   try {
     const encryptedData = {
@@ -112,4 +144,5 @@ module.exports = {
   saveBucketCredentials,
   saveAccountcredentials,
   saveUserCredentials,
+  getS3Client
 };

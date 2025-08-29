@@ -7,22 +7,22 @@ const upload = multer();
 
 //router.get("/list-folders", fileController.listFolders);
 router.get(
-  "/:bucketId/search-files",
+  "/:accountId/search-files",
   authMiddleware,
   fileController.searchFiles
 );
 router.get(
-  "/:bucketId/listByFolder",
+  "/:accountId/listByFolder",
   authMiddleware,
   fileController.listFilesByFolder
 );
-router.patch("/:bucketId/rename", authMiddleware, fileController.renameFile);
+router.patch("/:accountId/rename", authMiddleware, fileController.renameFile);
 router.post(
-  "/:bucketId/upload",
+  "/:accountId/upload",
   upload.array("files"),
   authMiddleware,
   fileController.uploadFile
 );
-router.delete("/:bucketId", authMiddleware, fileController.deleteFile);
-router.get('/:bucketId/download',authMiddleware,fileController.downloadFile);
+router.delete("/:accountId", authMiddleware, fileController.deleteFile);
+router.get("/:accountId/download", authMiddleware, fileController.downloadFile);
 module.exports = router;
