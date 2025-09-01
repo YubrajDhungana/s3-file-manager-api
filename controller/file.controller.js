@@ -76,7 +76,7 @@ const uploadFile = async (req, res) => {
 const downloadFile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const bucket_name = req.body.bucketName;
+    const bucket_name = req.query.bucketName;
     const accountId = req.params.accountId;
     const { key } = req.query;
 
@@ -140,7 +140,7 @@ const downloadFile = async (req, res) => {
 const listFilesByFolder = async (req, res) => {
   try {
     const userId = req.user.id;
-    const bucket_name = req.body.bucketName;
+    const bucket_name = req.query.bucketName;
     const accountId = req.params.accountId;
     const limit = parseInt(req.query.limit) || 10;
     const continuationToken = req.query.continuationToken || null;
@@ -205,7 +205,6 @@ const listFilesByFolder = async (req, res) => {
         url: `${aws_bucket_url}/${file.Key}`,
       }));
     res.status(200).json({
-      path: prefix,
       items: [...folders, ...files],
       isTruncated: response.IsTruncated,
       nextContinuationToken: response.NextContinuationToken || null,
@@ -318,7 +317,7 @@ const searchFiles = async (req, res) => {
   try {
     const userId = req.user.id;
     const accountId = req.params.accountId;
-    const bucket_name = req.body.bucketName;
+    const bucket_name = req.query.bucketName;
     const folder = req.query.folder || "";
     const searchTerm = (req.query.search || "").toLowerCase();
     const prefix =
@@ -345,7 +344,7 @@ const searchFiles = async (req, res) => {
       }
     }
 
-    const { s3Client,region} = await getS3Client(accountId);
+    const { s3Client, region } = await getS3Client(accountId);
 
     // Paginate through all files recursively
     do {

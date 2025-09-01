@@ -1,12 +1,13 @@
 const {
-
   uploadFile,
   deleteFile,
   listFilesByFolder,
   renameFile,
-  listFolders,
+  searchFiles,
+  downloadFile,
 } = require("../controller/file.controller");
 const { mockClient } = require("aws-sdk-client-mock");
+const db = require("../configs/db");
 const {
   S3Client,
   PutObjectCommand,
@@ -14,37 +15,37 @@ const {
   DeleteObjectsCommand,
   CopyObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 
 //mock s3 client
 const s3Mock = mockClient(S3Client);
 
 jest.mock("../configs/s3", () => ({
-  getS3ClientByBucketId: jest.fn(),
+  getS3Client: jest.fn(),
 }));
 
+jest.mock("../configs/db", () => ({
+  query: jest.fn(),
+}));
 
-const { getS3ClientByBucketId } = require("../configs/s3");
+const { getS3Client } = require("../configs/s3");
+const { json } = require("express");
 
 beforeEach(() => {
   s3Mock.reset();
-  getS3ClientByBucketId.mockReset();
-  
+  getS3Client.mockReset();
+  jest.clearAllMocks();
 });
 
 //upload file test
 describe("Upload file", () => {
-  it("should upload multiple files successfully", async () => {
-    getS3ClientByBucketId.mockResolvedValue({
-      s3Client: s3Mock,
-      bucketConfig: {
-        bucket_name: "test-bucket",
-        aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-      },
-    });
-
-    const req = {
-      params: { bucketId: 1 },
+  let mockReq, mockRes;
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 },
+      params: { accountId: "123" },
       files: [
         {
           originalname: "test.jpg",
@@ -54,70 +55,72 @@ describe("Upload file", () => {
         },
       ],
       body: {
+        bucketName: "test-bucket",
         key: "/s3-filemanager/",
       },
     };
-    const res = {
+    mockRes = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
+  });
+
+  it("should upload multiple files successfully", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 1, role_name: "admin" }]]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
 
     s3Mock.on(PutObjectCommand).resolves({});
-
-    await uploadFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
+    await uploadFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: "Files uploaded successfully",
       files: expect.arrayContaining([
         expect.objectContaining({
           name: "test.jpg",
           location: expect.stringContaining("test.jpg"),
+          size: 1234,
+          contentType: "image/jpeg",
         }),
       ]),
     });
   });
 
+  it("should return 403 for non-admin user without bucket access", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([[]]);
+
+    await uploadFile(mockReq, mockRes);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "You don't have access to this bucket",
+    });
+  });
+
   it("should return message on no file upload", async () => {
-    const req = {
-      params:{bucketId: 1},
-      files: [],
-    };
+    mockReq.files = [];
 
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
-
-    await uploadFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({
+    await uploadFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: expect.stringContaining("No files were uploaded"),
     });
   });
 
   it("should handle upload errors", async () => {
-    const req = {
-      params: { bucketId: 1 },
-      files: [
-        {
-          originalname: "test.jpg",
-          mimetype: "image/jpeg",
-          buffer: Buffer.from("test"),
-          size: 1234,
-        },
-      ],
-    };
-
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
-
+    db.query.mockResolvedValueOnce([[{ role_id: 1, role_name: "admin" }]]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
     s3Mock.on(PutObjectCommand).rejects(new Error("Error uploading file"));
 
-    await uploadFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
+    await uploadFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: expect.stringContaining("Error uploading file"),
     });
   });
@@ -125,54 +128,63 @@ describe("Upload file", () => {
 
 //test for rename file
 describe("rename file", () => {
-  it("should rename a file successfully", async () => {
-    getS3ClientByBucketId.mockResolvedValue({
-      s3Client: s3Mock,
-      bucketConfig: {
-        bucket_name: "test-bucket",
-        aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-      },
-    });
-    const req = {
-      params: { bucketId: 1 },
+  let mockReq, mockRes;
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 },
+      params: { accountId: "123" },
       body: {
         oldKey: "old-name.txt",
         newKey: "new-name.txt",
+        bucketName: "test-bucket",
       },
     };
-    const res = {
+    mockRes = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
+  });
+
+  it("should rename a file successfully", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
 
     s3Mock.on(CopyObjectCommand).resolves({});
     s3Mock.on(DeleteObjectCommand).resolves({});
 
-    await renameFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
+    await renameFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: "File renamed successfully",
       newKey: "new-name.txt",
     });
   });
 
-  it("should handle error renaming files", async () => {
-    getS3ClientByBucketId.mockRejectedValue(new Error("Database error"));
-    const req = {
-      params: { bucketId: 1 },
-      body: {
-        oldKey: "/s3-file-manager/file1.txt",
-        newKey: "/s3-file-manager/file2.txt",
-      },
-    };
+  it("should return 403 for non-admin user without bucket access", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([[]]);
 
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
-    await renameFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
+    await renameFile(mockReq, mockRes);
+
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "You don't have access to this bucket",
+    });
+  });
+
+  it("should handle error renaming files", async () => {
+    getS3Client.mockRejectedValue(new Error());
+
+    await renameFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: expect.stringContaining("Error renaming file"),
     });
   });
@@ -180,109 +192,109 @@ describe("rename file", () => {
 
 //test for delete the file
 describe("delete file", () => {
-  it("should delete files successfully", async () => {
-    getS3ClientByBucketId.mockResolvedValue({
-      s3Client:s3Mock,
-      bucketConfig: {
-        bucket_name: "test-bucket",
-        aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-      },
-    });
-    const req = {
-      params: { bucketId: 1 },
+  let mockReq, mockRes;
+  beforeEach(() => {
+    (mockReq = {
+      user: { id: 1 },
+      params: { accountId: "123" },
       body: {
         filePaths: ["/test/file1.txt", "/test/file2.txt"],
+        bucketName: "test-bucket"
       },
-    };
-
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
+    }),
+      (mockRes = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      });
+  });
+  it("should delete files successfully", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
 
     s3Mock.on(DeleteObjectsCommand).resolves({});
 
-    await deleteFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
+    await deleteFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: "Files deleted successfully",
     });
   });
 
-  it("should handle error deleting file", async () => {
-    getS3ClientByBucketId.mockResolvedValue({
-      s3Client: s3Mock,
-      bucketConfig: {
-        bucket_name: "test-bucket",
-        aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-      },
-    });
+  it("should return message on no file selection", async () => {
+    mockReq.body.filePaths = [];
 
-    const req = {
-      params: { bucketId: 1 },
-      body: {
-        filePaths: ["/test/file1.txt", "/test/file2.txt"],
-      },
-    };
-
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
-
-    s3Mock.on(DeleteObjectsCommand).rejects(new Error("Error deleting files"));
-    await deleteFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
-      message: expect.stringContaining("Error deleting files"),
+    await deleteFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "No file selected",
     });
   });
 
-  it("should return message on no file selection", async () => {
-    const req = {
-      params : { bucketId: 1 },
-      body: {},
-    };
+  it("should return 403 for non-admin user without bucket access", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([[]]);
 
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
+    await deleteFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "You don't have access to this bucket",
+    });
+  });
 
-    await deleteFile(req, res);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({
-      message: expect.stringContaining("No file selected"),
+  it("should handle error deleting file", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
+
+    s3Mock.on(DeleteObjectsCommand).rejects(new Error());
+    await deleteFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: expect.stringContaining("Error deleting files"),
     });
   });
 });
 
 //list by folder test
-//list by folder test
-describe("List files by folder/search files", () => {
-
-  it("should list files by folder", async () => {
-    getS3ClientByBucketId.mockResolvedValue({
-      s3Client: s3Mock,
-      bucketConfig: {
-        bucket_name: "test-bucket",
-        aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-      },
-    });
-
-    const req = {
-      params:{bucketId:1},
+describe("List files by folder", () => {
+  let mockReq, mockRes;
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 },
+      params: { accountId: "123" },
       query: {
-        limit: "5",
-        continuationToken: "5",
+        limit: 10,
+        continuationToken: "nextToken456",
         folder: "/test/files",
+        bucketName: "test-bucket"
       },
     };
-
-    const res = {
+    mockRes = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
     };
+  });
+  it("should list files by folder", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
 
     s3Mock.on(ListObjectsV2Command).resolves({
       Contents: [
@@ -302,10 +314,9 @@ describe("List files by folder/search files", () => {
       KeyCount: 2,
     });
 
-    await listFilesByFolder(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
-      path: "/test/files/",
+    await listFilesByFolder(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
       items: expect.arrayContaining([
         expect.objectContaining({
           name: "subfolder",
@@ -327,49 +338,38 @@ describe("List files by folder/search files", () => {
     });
   });
 
-  it("should handle error on listing file by folder or search", async () => {
-    getS3ClientByBucketId.mockRejectedValue(new Error("Database error"));
-    const req = {
-      params: { bucketId: 1 },
-      query: {
-        limit: "5",
-        continuationToken: "5",
-        folder: "/test/files",
-      },
-    };
+  it("should return 403 for non-admin user without bucket access", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([[]]);
 
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
+    await listFilesByFolder(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "You don't have access to this bucket",
+    });
+  });
+
+  it("should handle error on listing file by folder", async () => {
+    getS3Client.mockRejectedValue(new Error("Database error"));
 
     s3Mock.on(ListObjectsV2Command).rejects(new Error("S3 Error"));
-    await listFilesByFolder(req, res);
-    expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
+    await listFilesByFolder(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({
       message: "Internal server error",
     });
   });
 
   it("should list files from root when no folder is specified", async () => {
-    getS3ClientByBucketId.mockResolvedValue({
+    mockReq.query.folder = "";
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+    getS3Client.mockResolvedValue({
       s3Client: s3Mock,
-      bucketConfig: {
-        bucket_name: "test-bucket",
-        aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-      },
+      region: "us-east-1",
     });
-    const req = {
-      params: { bucketId: 1 },
-      query: {
-        limit: "10",
-      },
-    };
-
-    const res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
 
     s3Mock.on(ListObjectsV2Command).resolves({
       Contents: [
@@ -390,10 +390,9 @@ describe("List files by folder/search files", () => {
       KeyCount: 2,
     });
 
-    await listFilesByFolder(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith({
-      path: "",
+    await listFilesByFolder(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
       items: expect.arrayContaining([
         expect.objectContaining({
           name: "folder1",
@@ -413,57 +412,235 @@ describe("List files by folder/search files", () => {
   });
 });
 
-// //list folder test
-// describe("list folders", () => {
-//   it("should list folder successfully", async () => {
-//     getS3ClientByBucketId.mockResolvedValue({
-//       s3Client: s3Mock,
-//       bucketConfig: {
-//         bucket_name: "test-bucket",
-//         aws_bucket_url: "https://test-bucket.s3.amazonaws.com",
-//       },
-//     });
-//     req = {
-//       params: { bucketId: 1 },
-//       query: {
-//         prefix: "/s3-filemanager/",
-//       },
-//     };
+//test for search files
+describe("search files", () => {
+  let mockReq, mockRes;
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 },
+      params: { accountId: "123" },
+      query: {
+        folder: "/documents/",
+        search: "report",
+        bucketName: "test-bucket"
+      },
+    };
+    mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+  });
 
-//     res = {
-//       status: jest.fn().mockReturnThis(),
-//       json: jest.fn(),
-//     };
+  it("should search files successfully", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
 
-//     s3Mock.on(ListObjectsV2Command).resolves({
-//       CommonPrefixes: [{ Prefix: "folder1/" }, { Prefix: "folder2/" }],
-//     });
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
 
-//     await listFolders(req, res);
-//     expect(res.status).toHaveBeenCalledWith(200);
-//     expect(res.json).toHaveBeenCalledWith({
-//       folders: expect.any(Array),
-//     });
-//   });
+    s3Mock.on(ListObjectsV2Command).resolves({
+      Contents: [
+        {
+          Key: "/documents/annual-report.pdf",
+          LastModified: new Date(),
+          Size: 2048,
+        },
+        {
+          Key: "/documents/monthly-report.docx",
+          LastModified: new Date(),
+          Size: 1024,
+        },
+        {
+          Key: "/documents/other-file.txt",
+          LastModified: new Date(),
+          Size: 512,
+        },
+      ],
+      IsTruncated: false,
+      NextContinuationToken: null,
+      KeyCount: 3,
+    });
 
-//   it("should handle error listing folders", async () => {
-//     const req = {
-//       query: {
-//         prefix: "/s3-filemanager/",
-//       },
-//     };
+    await searchFiles(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      path: "/documents/",
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          name: "annual-report.pdf",
+          key: "/documents/annual-report.pdf",
+          type: "file",
+          size: 2048,
+          url: expect.stringContaining("annual-report.pdf"),
+        }),
+        expect.objectContaining({
+          name: "monthly-report.docx",
+          key: "/documents/monthly-report.docx",
+          type: "file",
+          size: 1024,
+          url: expect.stringContaining("monthly-report.docx"),
+        }),
+      ]),
+      isTruncated: false,
+      nextContinuationToken: null,
+      keyCount: 2, // Only files matching "report" search term
+    });
+  });
 
-//     const res = {
-//       status: jest.fn().mockReturnThis(),
-//       json: jest.fn(),
-//     };
+  it("should return 403 for non-admin user without bucket access", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "user" }]]);
+    db.query.mockResolvedValueOnce([[]]);
 
-//     s3Mock.on(ListObjectsV2Command).rejects(new Error("Error listing folders"));
+    await searchFiles(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "You don't have access to this bucket",
+    });
+  });
 
-//     await listFolders(req, res);
-//     expect(res.status).toHaveBeenCalledWith(500);
-//     expect(res.json).toHaveBeenCalledWith({
-//       message: expect.stringContaining("Error listing folders"),
-//     });
-//   });
-// });
+  it("should return empty results when no files match search term", async () => {
+    mockReq.query.search = "nonexistent";
+
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
+
+    s3Mock.on(ListObjectsV2Command).resolves({
+      Contents: [
+        {
+          Key: "/documents/other-file.txt",
+          LastModified: new Date(),
+          Size: 512,
+        },
+      ],
+      IsTruncated: false,
+      NextContinuationToken: null,
+      KeyCount: 1,
+    });
+
+    await searchFiles(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      path: "/documents/",
+      items: [],
+      isTruncated: false,
+      nextContinuationToken: null,
+      keyCount: 0,
+    });
+  });
+  it("should handle error on searching files", async () => {
+    db.query.mockRejectedValue(new Error("Database error"));
+
+    await searchFiles(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "Internal server error",
+    });
+  });
+});
+
+//test for download file:
+describe("Download file", () => {
+  let mockReq, mockRes;
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 },
+      params: { accountId: "123" },
+      query: {
+        key: "/documents/test-file.pdf",
+        bucketName: "test-bucket",
+      },
+    };
+    mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+      setHeader: jest.fn(),
+    };
+  });
+
+  it("should download file successfully", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
+
+    const mockStream = {
+      pipe: jest.fn(),
+    };
+
+    s3Mock.on(HeadObjectCommand).resolves({
+      ContentType: "application/pdf",
+      ContentLength: 2048,
+      LastModified: new Date("2024-01-01"),
+      ETag: '"abc123"',
+    });
+
+    s3Mock.on(GetObjectCommand).resolves({
+      Body: mockStream,
+    });
+
+    await downloadFile(mockReq, mockRes);
+
+    expect(mockRes.setHeader).toHaveBeenCalledWith(
+      "Content-Disposition",
+      'attachment; filename="test-file.pdf"'
+    );
+    expect(mockRes.setHeader).toHaveBeenCalledWith(
+      "Content-Type",
+      "application/pdf"
+    );
+    expect(mockRes.setHeader).toHaveBeenCalledWith("Content-Length", 2048);
+    expect(mockStream.pipe).toHaveBeenCalledWith(mockRes);
+  });
+
+  it("should return 400 if file key is missing", async () => {
+    mockReq.query.key = "";
+
+    await downloadFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(400);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "File key is required",
+    });
+  });
+  it("should return 403 for non-admin user without bucket access", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([[]]);
+
+    await downloadFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "You don't have access to this bucket",
+    });
+  });
+  it("should handle S3 errors during download", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2, role_name: "QA_ROLE" }]]);
+    db.query.mockResolvedValueOnce([
+      [{ id: 1, role_id: 2, accountId: 123, bucket_name: "test-bucket" }],
+    ]);
+    getS3Client.mockResolvedValue({
+      s3Client: s3Mock,
+      region: "us-east-1",
+    });
+
+    s3Mock.on(HeadObjectCommand).rejects(new Error("File not found"));
+
+    await downloadFile(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(500);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "Internal server error",
+    });
+  });
+});
