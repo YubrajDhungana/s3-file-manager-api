@@ -263,55 +263,55 @@ const deleteFile = async (req, res) => {
   }
 };
 
-const renameFile = async (req, res) => {
-  const userId = req.user.id;
-  const accountId = req.params.accountId;
-  const { oldKey, newKey, bucketName } = req.body;
-  const bucket_name = bucketName;
-  try {
-    //check if user has access to this bucket or not
-    const [row] = await db.query(
-      "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
-      [userId]
-    );
+// const renameFile = async (req, res) => {
+//   const userId = req.user.id;
+//   const accountId = req.params.accountId;
+//   const { oldKey, newKey, bucketName } = req.body;
+//   const bucket_name = bucketName;
+//   try {
+//     //check if user has access to this bucket or not
+//     const [row] = await db.query(
+//       "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+//       [userId]
+//     );
 
-    if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
-      const [bucket] = await db.query(
-        "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
-        [row[0].role_id, bucket_name]
-      );
+//     if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+//       const [bucket] = await db.query(
+//         "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+//         [row[0].role_id, bucket_name]
+//       );
 
-      if (bucket.length === 0) {
-        return res
-          .status(403)
-          .json({ message: "You don't have access to this bucket" });
-      }
-    }
+//       if (bucket.length === 0) {
+//         return res
+//           .status(403)
+//           .json({ message: "You don't have access to this bucket" });
+//       }
+//     }
 
-    const { s3Client } = await getS3Client(accountId);
+//     const { s3Client } = await getS3Client(accountId);
 
-    const params = {
-      Bucket: bucket_name,
-      CopySource: `${bucket_name}/${oldKey}`,
-      Key: newKey,
-    };
+//     const params = {
+//       Bucket: bucket_name,
+//       CopySource: `${bucket_name}/${oldKey}`,
+//       Key: newKey,
+//     };
 
-    const deleteParam = {
-      Bucket: bucket_name,
-      Key: oldKey,
-    };
-    await s3Client.send(new CopyObjectCommand(params));
-    await s3Client.send(new DeleteObjectCommand(deleteParam));
-    res
-      .status(200)
-      .json({ message: "File renamed successfully", newKey: newKey });
-  } catch (error) {
-    console.error("Error renaming file:", error);
-    return res
-      .status(500)
-      .json({ message: "Error renaming file"});
-  }
-};
+//     const deleteParam = {
+//       Bucket: bucket_name,
+//       Key: oldKey,
+//     };
+//     await s3Client.send(new CopyObjectCommand(params));
+//     await s3Client.send(new DeleteObjectCommand(deleteParam));
+//     res
+//       .status(200)
+//       .json({ message: "File renamed successfully", newKey: newKey });
+//   } catch (error) {
+//     console.error("Error renaming file:", error);
+//     return res
+//       .status(500)
+//       .json({ message: "Error renaming file"});
+//   }
+// };
 
 const searchFiles = async (req, res) => {
   try {
@@ -392,7 +392,6 @@ module.exports = {
   uploadFile,
   deleteFile,
   listFilesByFolder,
-  renameFile,
   searchFiles,
   downloadFile,
 };

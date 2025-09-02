@@ -16,7 +16,6 @@ router.get(
   authMiddleware,
   fileController.listFilesByFolder
 );
-router.patch("/:accountId/rename", authMiddleware, fileController.renameFile);
 router.post(
   "/:accountId/upload",
   upload.array("files"),
