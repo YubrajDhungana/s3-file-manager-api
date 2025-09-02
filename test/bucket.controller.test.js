@@ -1,4 +1,8 @@
-const { listBuckets } = require("../controller/bucket.controller");
+const bucketController = require("../controller/bucket.controller");
+const db = require("../configs/db");
+const { decrypt } = require("../utils/cryptoUtils");
+const { S3Client, ListBucketsCommand } = require("@aws-sdk/client-s3");
+
 jest.mock("../configs/db", () => ({
   query: jest.fn(),
 }));
@@ -6,121 +10,112 @@ jest.mock("../utils/cryptoUtils", () => ({
   decrypt: jest.fn(),
 }));
 
-const db = require("../configs/db");
-const { decrypt } = require("../utils/cryptoUtils");
-beforeEach(() => {
-  db.query.mockReset();
-  decrypt.mockReset();
-});
+jest.mock("@aws-sdk/client-s3", () => ({
+  S3Client: jest.fn(),
+  ListBucketsCommand: jest.fn(),
+}));
 
-describe("Bucket Controller", () => {
-  describe("listBuckets", () => {
-    it("should list buckets successfully", async () => {
-      // Mock database response
-      const mockRows = [
-        { id: 1, bucket_alias: "encrypted_bucket_1" },
-        { id: 2, bucket_alias: "encrypted_bucket_2" },
-      ];
+describe("listBuckets", () => {
+  let mockReq, mockRes;
+  let mockS3Send;
+  beforeEach(() => {
+    mockReq = {
+      user: { id: 1 },
+      params: { id: "123" },
+    };
+    mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
 
-      db.query.mockResolvedValue([mockRows]);
-      decrypt.mockReturnValueOnce("my-test-bucket-1");
-      decrypt.mockReturnValueOnce("my-test-bucket-2");
+    mockS3Send = jest.fn();
+    S3Client.mockImplementation(() => ({
+      send: mockS3Send,
+    }));
 
-      const req = {
-        params: { id: "123" },
-      };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
+    jest.clearAllMocks();
+  });
 
-      await listBuckets(req, res);
+  it("should return 403 if user has no role assigned", async () => {
+    db.query.mockResolvedValueOnce([[]]); // No roles found
 
-      expect(db.query).toHaveBeenCalledWith(
-        "SELECT id, bucket_alias FROM aws_buckets where account_id=?",
-        "123"
-      );
-      expect(decrypt).toHaveBeenCalledTimes(2);
-      expect(decrypt).toHaveBeenNthCalledWith(1, "encrypted_bucket_1");
-      expect(decrypt).toHaveBeenNthCalledWith(2, "encrypted_bucket_2");
+    await bucketController.listBuckets(mockReq, mockRes);
 
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith([
-        { id: 1, bucket_name: "my-test-bucket-1" },
-        { id: 2, bucket_name: "my-test-bucket-2" },
-      ]);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "Unauthorized: No roles assigned",
+    });
+  });
+
+  it("should list buckets successfully for admin user ", async () => {
+    db.query
+      .mockResolvedValueOnce([[{ role_id: 1 }]])
+      .mockResolvedValueOnce([[{ name: "admin" }]]);
+
+    db.query.mockResolvedValueOnce([[
+      { 
+        access_key_id: "encrypted-access-key", 
+        secret_access_key: "encrypted-secret-key", 
+        region: "encrypted-region" 
+      }
+    ]]);
+
+    decrypt
+      .mockReturnValueOnce("decrypted-access-key")
+      .mockReturnValueOnce("decrypted-secret-key")
+      .mockReturnValueOnce("decrypted-region");
+
+    // Mock S3 response
+    mockS3Send.mockResolvedValueOnce({
+      Buckets: [
+        { Name: "bucket-1" },
+        { Name: "bucket-2" }
+      ]
     });
 
-    it("should return empty array when no buckets found for account", async () => {
-      db.query.mockResolvedValue([[]]);
+    await bucketController.listBuckets(mockReq, mockRes);
+   expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith([
+      { bucket_name: "bucket-1" },
+      { bucket_name: "bucket-2" }
+    ]);
+  });
 
-      const req = {
-        params: { id: "123" },
-      };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
+  it("Admin user- but account not found,should return 404", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 1 }]]);
+    db.query.mockResolvedValueOnce([[{ name: "admin" }]]);
+    db.query.mockResolvedValueOnce([[]]);
 
-      await listBuckets(req, res);
-
-      expect(db.query).toHaveBeenCalledWith(
-        "SELECT id, bucket_alias FROM aws_buckets where account_id=?",
-        "123"
-      );
-      expect(decrypt).not.toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith([]);
+    await bucketController.listBuckets(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(404);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "Account with ID 123 not found"
     });
+  });
 
-    it("should handle missing account ID parameter", async () => {
-      const req = {
-        params: {},
-      };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
+  it("Regular user with role access - should return assigned buckets", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2 }]]);
+    db.query.mockResolvedValueOnce([[{ name: "user" }]]);
+    db.query.mockResolvedValueOnce([
+      [{bucket_name: "test-bucket"}],
+    ]);
 
-      await listBuckets(req, res);
+    await bucketController.listBuckets(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith([
+      { bucket_name: "test-bucket" },
+    ]);
+  });
 
-      expect(db.query).toHaveBeenCalledWith(
-        "SELECT id, bucket_alias FROM aws_buckets where account_id=?",
-        undefined
-      );
-    });
+  it("Regular user with no bucket access - should return 403", async () => {
+    db.query.mockResolvedValueOnce([[{ role_id: 2 }]]);
+    db.query.mockResolvedValueOnce([[{ name: "user" }]]);
+    db.query.mockResolvedValueOnce([[]]);
 
-    it("should handle database errors", async () => {
-      db.query.mockRejectedValue(new Error("Database connection error"));
-
-      const req = {
-        params: { id: "123" },
-      };
-      const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn(),
-      };
-
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
-
-      await listBuckets(req, res);
-
-      expect(db.query).toHaveBeenCalledWith(
-        "SELECT id, bucket_alias FROM aws_buckets where account_id=?",
-        "123"
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error fetching buckets:",
-        expect.any(Error)
-      );
-      expect(res.status).toHaveBeenCalledWith(500);
-      expect(res.json).toHaveBeenCalledWith({
-        message: "Internal Server Error",
-      });
-
-      consoleSpy.mockRestore();
+    await bucketController.listBuckets(mockReq, mockRes);
+    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockRes.json).toHaveBeenCalledWith({
+      message: "No buckets accessible for your roles",
     });
   });
 });

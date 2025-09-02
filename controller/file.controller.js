@@ -5,9 +5,9 @@ const {
   CopyObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
-  GetObjectCommand
+  GetObjectCommand,
 } = require("@aws-sdk/client-s3");
-const { getS3ClientByBucketId } = require("../configs/s3");
+const { getS3Client } = require("../configs/s3");
 const db = require("../configs/db");
 const path = require("path");
 require("dotenv").config();
@@ -18,12 +18,33 @@ const uploadFile = async (req, res) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No files were uploaded" });
     }
-    const bucketId = req.params.bucketId;
+    const userId = req.user.id;
+    const bucket_name = req.body.bucketName;
+    const accountId = req.params.accountId;
 
-    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
-    const { bucket_name, aws_bucket_url } = bucketConfig;
+    //check if user has access to this bucket or not
+    const [row] = await db.query(
+      "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+      [userId]
+    );
+
+    if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+      const [bucket] = await db.query(
+        "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+        [row[0].role_id, bucket_name]
+      );
+
+      if (bucket.length === 0) {
+        return res
+          .status(403)
+          .json({ message: "You don't have access to this bucket" });
+      }
+    }
+
+    const { s3Client, region } = await getS3Client(accountId);
 
     const baseKey = req.body.key || "";
+    const aws_bucket_url = `https://${bucket_name}.s3.${region}.amazonaws.com`;
     const uploadFiles = await Promise.all(
       req.files.map(async (file) => {
         const key = `${baseKey}${file.originalname}`;
@@ -53,55 +74,103 @@ const uploadFile = async (req, res) => {
 };
 
 const downloadFile = async (req, res) => {
-  try{
-    const bucketId = req.params.bucketId
-    const{ key } = req.query
-    if(!key){
-      res.status(400).json({message:"File key is required"})
+  try {
+    const userId = req.user.id;
+    const bucket_name = req.query.bucketName;
+    const accountId = req.params.accountId;
+    const { key } = req.query;
+
+    if (!key) {
+      res.status(400).json({ message: "File key is required" });
     }
 
-    const {s3Client, bucketConfig} = await getS3ClientByBucketId(bucketId);
-    const {bucket_name} = bucketConfig;
+    //check if user has access to the bucket or not
+    const [row] = await db.query(
+      "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+      [userId]
+    );
+
+    if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+      const [bucket] = await db.query(
+        "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+        [row[0].role_id, bucket_name]
+      );
+
+      if (bucket.length === 0) {
+        return res
+          .status(403)
+          .json({ message: "You don't have access to this bucket" });
+      }
+    }
+    const { s3Client } = await getS3Client(accountId);
 
     const headObject = new HeadObjectCommand({
-      Bucket:bucket_name,
-      Key:key
-    })
+      Bucket: bucket_name,
+      Key: key,
+    });
 
-    const headResponse = await  s3Client.send(headObject);
+    const headResponse = await s3Client.send(headObject);
 
     // Set appropriate headers
-    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(key)}"`);
-    res.setHeader('Content-Type', headResponse.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Length', headResponse.ContentLength);
-    res.setHeader('Last-Modified', headResponse.LastModified.toUTCString());
-    res.setHeader('ETag', headResponse.ETag);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${path.basename(key)}"`
+    );
+    res.setHeader(
+      "Content-Type",
+      headResponse.ContentType || "application/octet-stream"
+    );
+    res.setHeader("Content-Length", headResponse.ContentLength);
+    res.setHeader("Last-Modified", headResponse.LastModified.toUTCString());
+    res.setHeader("ETag", headResponse.ETag);
 
     const command = new GetObjectCommand({
-      Bucket:bucket_name,
-      Key:key
-    })
+      Bucket: bucket_name,
+      Key: key,
+    });
 
-    const response  = await s3Client.send(command);
+    const response = await s3Client.send(command);
     response.Body.pipe(res);
-  }catch(error){
+  } catch (error) {
     console.error("Error downloading file:", error);
-    res.status(500).json({message:"Internal server error"});
+    res.status(500).json({ message: "Internal server error" });
   }
-}
+};
 
 const listFilesByFolder = async (req, res) => {
   try {
-    const bucketId = req.params.bucketId;
+    const userId = req.user.id;
+    const bucket_name = req.query.bucketName;
+    const accountId = req.params.accountId;
     const limit = parseInt(req.query.limit) || 10;
     const continuationToken = req.query.continuationToken || null;
+
+    //check if user has access to this bucket or not
+    const [row] = await db.query(
+      "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+      [userId]
+    );
+
+    if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+      const [bucket] = await db.query(
+        "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+        [row[0].role_id, bucket_name]
+      );
+
+      if (bucket.length === 0) {
+        return res
+          .status(403)
+          .json({ message: "You don't have access to this bucket" });
+      }
+    }
+
     // If no folder is provided, list from the root of the bucket
     const folder = req.query.folder || "";
     const prefix =
       folder === "" || folder.endsWith("/") ? folder : folder + "/";
 
-    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
-    const { bucket_name, aws_bucket_url } = bucketConfig;
+    // const { s3Client,region} = await getS3ClientByBucketId(bucketId);
+    const { s3Client, region } = await getS3Client(accountId);
 
     const command = new ListObjectsV2Command({
       Bucket: bucket_name,
@@ -122,6 +191,8 @@ const listFilesByFolder = async (req, res) => {
       };
     });
 
+    const aws_bucket_url = `https://${bucket_name}.s3.${region}.amazonaws.com`;
+
     // Files directly inside the current folder
     const files = (response.Contents || [])
       .filter((file) => file.Key !== prefix)
@@ -134,7 +205,6 @@ const listFilesByFolder = async (req, res) => {
         url: `${aws_bucket_url}/${file.Key}`,
       }));
     res.status(200).json({
-      path: prefix,
       items: [...folders, ...files],
       isTruncated: response.IsTruncated,
       nextContinuationToken: response.NextContinuationToken || null,
@@ -146,14 +216,34 @@ const listFilesByFolder = async (req, res) => {
   }
 };
 const deleteFile = async (req, res) => {
-  const bucketId = req.params.bucketId;
+  const userId = req.user.id;
+  const accountId = req.params.accountId;
+  const bucket_name = req.body.bucketName;
   const filePaths = req.body.filePaths;
   if (!filePaths || filePaths.length === 0) {
     return res.status(400).json({ message: "No file selected" });
   }
 
-  const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
-  const { bucket_name } = bucketConfig;
+  //check if user has access to this bucket or not
+  const [row] = await db.query(
+    "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+    [userId]
+  );
+
+  if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+    const [bucket] = await db.query(
+      "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+      [row[0].role_id, bucket_name]
+    );
+
+    if (bucket.length === 0) {
+      return res
+        .status(403)
+        .json({ message: "You don't have access to this bucket" });
+    }
+  }
+
+  const { s3Client } = await getS3Client(accountId);
 
   try {
     const params = {
@@ -174,11 +264,31 @@ const deleteFile = async (req, res) => {
 };
 
 const renameFile = async (req, res) => {
-  const bucketId = req.params.bucketId;
-  const { oldKey, newKey } = req.body;
+  const userId = req.user.id;
+  const accountId = req.params.accountId;
+  const { oldKey, newKey, bucketName } = req.body;
+  const bucket_name = bucketName;
   try {
-    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
-    const { bucket_name } = bucketConfig;
+    //check if user has access to this bucket or not
+    const [row] = await db.query(
+      "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+      [userId]
+    );
+
+    if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+      const [bucket] = await db.query(
+        "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+        [row[0].role_id, bucket_name]
+      );
+
+      if (bucket.length === 0) {
+        return res
+          .status(403)
+          .json({ message: "You don't have access to this bucket" });
+      }
+    }
+
+    const { s3Client } = await getS3Client(accountId);
 
     const params = {
       Bucket: bucket_name,
@@ -199,13 +309,15 @@ const renameFile = async (req, res) => {
     console.error("Error renaming file:", error);
     return res
       .status(500)
-      .json({ message: "Error renaming file: " + error.message });
+      .json({ message: "Error renaming file"});
   }
 };
 
 const searchFiles = async (req, res) => {
   try {
-    const bucketId = req.params.bucketId;
+    const userId = req.user.id;
+    const accountId = req.params.accountId;
+    const bucket_name = req.query.bucketName;
     const folder = req.query.folder || "";
     const searchTerm = (req.query.search || "").toLowerCase();
     const prefix =
@@ -213,8 +325,26 @@ const searchFiles = async (req, res) => {
     let continuationToken = null;
     let matchedFiles = [];
 
-    const { s3Client, bucketConfig } = await getS3ClientByBucketId(bucketId);
-    const { bucket_name, aws_bucket_url } = bucketConfig;
+    //check if user has access to this bucket or not
+    const [row] = await db.query(
+      "SELECT r.id AS role_id, r.name AS role_name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = ?",
+      [userId]
+    );
+
+    if (row.length > 0 && row[0].role_name.toLowerCase() !== "admin") {
+      const [bucket] = await db.query(
+        "SELECT * FROM role_buckets WHERE role_id= ? AND bucket_name=?",
+        [row[0].role_id, bucket_name]
+      );
+
+      if (bucket.length === 0) {
+        return res
+          .status(403)
+          .json({ message: "You don't have access to this bucket" });
+      }
+    }
+
+    const { s3Client, region } = await getS3Client(accountId);
 
     // Paginate through all files recursively
     do {
@@ -223,7 +353,7 @@ const searchFiles = async (req, res) => {
         Prefix: prefix,
         ContinuationToken: continuationToken,
       });
-
+      const aws_bucket_url = `https://${bucket_name}.s3.${region}.amazonaws.com`;
       const response = await s3Client.send(command);
       const files = (response.Contents || [])
         .filter((file) => file.Key !== prefix)
@@ -264,5 +394,5 @@ module.exports = {
   listFilesByFolder,
   renameFile,
   searchFiles,
-  downloadFile
+  downloadFile,
 };
