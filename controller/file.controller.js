@@ -309,7 +309,7 @@ const renameFile = async (req, res) => {
     console.error("Error renaming file:", error);
     return res
       .status(500)
-      .json({ message: "Error renaming file: " + error.message });
+      .json({ message: "Error renaming file"});
   }
 };
 
