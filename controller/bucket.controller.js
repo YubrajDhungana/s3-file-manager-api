@@ -44,16 +44,25 @@ const listBuckets = async (req, res) => {
       [userId]
     );
 
-    if (roleId.length === 0) {
+    const [user] = await db.query("SELECT user_type FROM user WHERE id=?", [
+      userId,
+    ]);
+    if (roleId.length === 0 && user[0].user_type.toLowerCase() === "user") {
       return res
         .status(403)
         .json({ message: "Unauthorized: No roles assigned" });
     }
     //check if it is admin
-    const [result] = await db.query("SELECT name FROM roles where id=?", [
-      roleId[0].role_id,
-    ]);
-    if (result.length > 0 && result[0].name.toLowerCase() === "admin") {
+    let result = [];
+    if (user[0].user_type !== "superadmin") {
+      [result] = await db.query("SELECT name FROM roles where id=?", [
+        roleId[0].role_id,
+      ]);
+    }
+    if (
+      (result.length > 0 && result[0].name.toLowerCase() === "admin") ||
+      user[0].user_type.toLowerCase() === "superadmin"
+    ) {
       const [rows] = await db.query(
         "SELECT access_key_id,secret_access_key, region FROM aws_accounts WHERE id = ?",
         [accountId]

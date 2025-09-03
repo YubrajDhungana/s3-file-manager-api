@@ -1,6 +1,6 @@
 const db = require("../configs/db");
 const jwt = require("jsonwebtoken");
-const bcrypt = require('bcrypt');
+const bcrypt = require("bcrypt");
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 const loginCheck = async (req, res) => {
@@ -12,10 +12,9 @@ const loginCheck = async (req, res) => {
         .status(400)
         .json({ message: "Email and password are required" });
     }
-    const [rows] = await db.query(
-      "SELECT * FROM user WHERE email = ?",
-      [email]
-    );
+    const [rows] = await db.query("SELECT * FROM user WHERE email = ?", [
+      email,
+    ]);
     if (!rows || rows.length === 0) {
       return res.status(401).json({ message: "Invalid email or password" });
     }
@@ -24,12 +23,12 @@ const loginCheck = async (req, res) => {
       return res.status(401).json({ message: "you are not allowed to login" });
     }
     const user = rows[0];
-    const isPasswordValid = await bcrypt.compare(password,user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if(!isPasswordValid){
-      return res.status(401).json({message:"Invalid email or password"});
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid email or password" });
     }
-    
+
     const jti = uuidv4();
     const expiresIn = "1hr";
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
@@ -38,6 +37,7 @@ const loginCheck = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        user_type: user.user_type,
         jti: jti,
       },
       process.env.SECRET_KEY,
@@ -55,7 +55,8 @@ const loginCheck = async (req, res) => {
       maxAge: 60 * 60 * 1000,
     });
     res.status(200).json({
-      message: "login successfull"});
+      message: "login successfull",
+    });
   } catch (error) {
     console.log("an error occurred while login check ", error);
     res.status(500).json({ message: "Internal server error" });
@@ -67,6 +68,7 @@ const authcheck = (req, res) => {
     authenticated: true,
     name: req.user.name,
     email: req.user.email,
+    user_type: req.user.user_type,
   });
 };
 
