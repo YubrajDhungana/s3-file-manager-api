@@ -28,7 +28,9 @@ const createRole = async (req, res) => {
 
 const getAllRoles = async (req, res) => {
   try {
-    const [roles] = await db.query("SELECT id, name FROM roles ORDER BY name");
+    const [roles] = await db.query(
+      "SELECT r.id AS role_id,r.name AS role_name,GROUP_CONCAT(rb.bucket_name) AS buckets FROM roles r LEFT JOIN role_buckets rb ON r.id = rb.role_id GROUP BY r.id, r.name"
+    );
 
     res.status(200).json({
       message: "Roles retrieved successfully",
@@ -45,7 +47,7 @@ const getAllRoles = async (req, res) => {
 
 const assignBucketToRole = async (req, res) => {
   const roleId = req.params.roleId;
-  const accountId = req.params.accoundId;
+  const accountId = req.params.accountId;
   const bucketName = req.body.bucketName;
   try {
     if (!bucketName) {
@@ -66,12 +68,24 @@ const assignBucketToRole = async (req, res) => {
 
     // avoid duplicate assignment
     await db.query(
-      `INSERT IGNORE INTO role_buckets (role_id,account_id,bucket_alias) VALUES (?,?,?)`,
+      `INSERT IGNORE INTO role_buckets (role_id,account_id,bucket_name) VALUES (?,?,?)`,
       [roleId, accountId, bucketName]
     );
     res.status(201).json({ message: "Bucket assigned to role successfully" });
   } catch (error) {
     console.error("Error assigning bucket to role:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const getAllUsers = async (req, res) => {
+  try {
+    const [user] = await db.query(
+      "SELECT u.id,u.name,u.email,u.status,r.name AS role_name FROM user u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE u.user_type = 'user';"
+    );
+    res.status(200).json({ user: user });
+  } catch (error) {
+    console.log(error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -116,4 +130,5 @@ module.exports = {
   assignBucketToRole,
   assignRoleToUser,
   getAllRoles,
+  getAllUsers,
 };
