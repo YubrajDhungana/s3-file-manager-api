@@ -195,3 +195,212 @@ describe("assign buckets to role", () => {
     });
   });
 });
+
+describe("getAllRoles", () => {
+  let req, res;
+  beforeEach(() => {
+    req = {};
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    jest.clearAllMocks();
+  });
+
+  it("should return 200 and roles data", async () => {
+    const mockRoles = [{ role_id: 1, role_name: "admin", buckets: "bucket1,bucket2" }];
+    db.query.mockResolvedValueOnce([mockRoles]);
+
+    await roleController.getAllRoles(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Roles retrieved successfully",
+      data: mockRoles,
+    });
+  });
+
+  it("should return 500 on db error", async () => {
+    db.query.mockRejectedValueOnce(new Error("DB error"));
+    await roleController.getAllRoles(req, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      message: "Internal server error",
+    });
+  });
+});
+
+describe("deleteRole", () => {
+  let req, res;
+  beforeEach(() => {
+    req = {
+      params: { roleId: 1 },
+      user: { user_type: "superadmin" },
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    jest.clearAllMocks();
+  });
+
+  it("should return 400 if roleId is missing", async () => {
+    req.params.roleId = undefined;
+    await roleController.deleteRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: "RoleId is required" });
+  });
+
+  it("should return 403 if user is not superadmin", async () => {
+    req.user.user_type = "admin";
+    await roleController.deleteRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: "Only superadmin can delete roles" });
+  });
+
+  it("should return 404 if role not found", async () => {
+    db.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
+    await roleController.deleteRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ message: "Role not found" });
+  });
+
+  it("should return 200 if role deleted", async () => {
+    db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+    await roleController.deleteRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ message: "Role deleted successfully" });
+  });
+
+  it("should return 500 on db error", async () => {
+    db.query.mockRejectedValueOnce(new Error("DB error"));
+    await roleController.deleteRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
+  });
+});
+
+describe("getAllUsers", () => {
+  let req, res;
+  beforeEach(() => {
+    req = {};
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    jest.clearAllMocks();
+  });
+
+  it("should return 200 and user data", async () => {
+    const mockUsers = [{ id: 1, name: "User1", email: "u1@test.com", status: "active", role_name: "admin" }];
+    db.query.mockResolvedValueOnce([mockUsers]);
+    await roleController.getAllUsers(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ user: mockUsers });
+  });
+
+  it("should return 500 on db error", async () => {
+    db.query.mockRejectedValueOnce(new Error("DB error"));
+    await roleController.getAllUsers(req, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ message: "Internal server error" });
+  });
+});
+
+describe("getBucketsByRoleId", () => {
+  let req, res;
+  beforeEach(() => {
+    req = {
+      params: { roleId: 2 },
+      user: { user_type: "superadmin" },
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    jest.clearAllMocks();
+  });
+
+  it("should return 400 if roleId is missing", async () => {
+    req.params.roleId = undefined;
+    await roleController.getBucketsByRoleId(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: "RoleId is required" });
+  });
+
+  it("should return 403 if user is not superadmin", async () => {
+    req.user.user_type = "admin";
+    await roleController.getBucketsByRoleId(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: "Only superadmin can delete roles" });
+  });
+
+  it("should return 200 with buckets", async () => {
+    const mockBuckets = [{ bucket_name: "bucket1" }];
+    db.query.mockResolvedValueOnce([mockBuckets]);
+    await roleController.getBucketsByRoleId(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ buckets: mockBuckets });
+  });
+
+  it("should handle db error gracefully", async () => {
+    db.query.mockRejectedValueOnce(new Error("DB error"));
+    await roleController.getBucketsByRoleId(req, res);
+  });
+});
+describe("deleteBucketByRole", () => {
+  let req, res;
+  beforeEach(() => {
+    req = {
+      params: { roleId: 2 },
+      query: { bucketName: "bucket1" },
+      user: { user_type: "superadmin" },
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+    jest.clearAllMocks();
+  });
+
+  it("should return 400 if roleId is missing", async () => {
+    req.params.roleId = undefined;
+    await roleController.deleteBucketByRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: "RoleId is required" });
+  });
+
+  it("should return 400 if bucketName is missing", async () => {
+    req.query.bucketName = undefined;
+    await roleController.deleteBucketByRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: "Bucket name is required" });
+  });
+
+  it("should return 403 if user is not superadmin", async () => {
+    req.user.user_type = "admin";
+    await roleController.deleteBucketByRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: "Only superadmin can delete roles" });
+  });
+
+  it("should return 404 if bucket not found", async () => {
+    db.query.mockResolvedValueOnce([{ affectedRows: 0 }]);
+    await roleController.deleteBucketByRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ message: "Bucket not found" });
+  });
+
+  it("should return 200 if bucket deleted", async () => {
+    db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+    await roleController.deleteBucketByRole(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ message: "Bucket deleted successfully" });
+  });
+
+  it("should handle db error gracefully", async () => {
+    db.query.mockRejectedValueOnce(new Error("DB error"));
+    await roleController.deleteBucketByRole(req, res);
+    
+  });
+});

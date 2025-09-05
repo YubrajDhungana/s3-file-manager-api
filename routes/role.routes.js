@@ -8,5 +8,8 @@ router.post("/:userId/role/:roleId", authMiddleware, roleController.assignRoleTo
 router.post("/:roleId/account/:accountId/buckets", authMiddleware, roleController.assignBucketToRole);
 router.get('/list-roles',authMiddleware,roleController.getAllRoles);
 router.get('/get-users',authMiddleware,roleController.getAllUsers);
+router.delete('/:roleId/delete-role',authMiddleware,roleController.deleteRole);
+router.delete('/:roleId/delete-bucket',authMiddleware,roleController.deleteBucketByRole);
+router.get('/:roleId/get-buckets',authMiddleware,roleController.getBucketsByRoleId);
 
 module.exports = router;

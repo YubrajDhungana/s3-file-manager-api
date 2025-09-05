@@ -45,6 +45,26 @@ const getAllRoles = async (req, res) => {
   }
 };
 
+const deleteRole = async (req,res)=>{
+  const roleId=req.params.roleId;
+  try {
+    if(!roleId){
+      return res.status(400).json({message:"RoleId is required"});
+    }
+    if(req.user.user_type !== 'superadmin'){
+      return res.status(403).json({message:"Only superadmin can delete roles"});
+    }
+    const [result]=await db.query("DELETE FROM roles WHERE id=?",[roleId]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Role not found" });
+    }
+    res.status(200).json({ message: "Role deleted successfully"});
+  } catch (error) {
+    console.error("Error deleting role:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 const assignBucketToRole = async (req, res) => {
   const roleId = req.params.roleId;
   const accountId = req.params.accountId;
@@ -90,6 +110,47 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+const getBucketsByRoleId = async (req, res) => {
+  const roleId = req.params.roleId;
+  try{
+    if(!roleId){
+      return res.status(400).json({message:"RoleId is required"});
+    }
+    if(req.user.user_type !== 'superadmin'){
+      return res.status(403).json({message:"Only superadmin can delete roles"});
+    }
+    const [buckets] = await db.query("SELECT bucket_name FROM role_buckets WHERE role_id = ?", [roleId]);
+    res.status(200).json({ buckets: buckets });
+  }catch(error){
+    console.error("Error fetching buckets for role:", error);
+  }
+}
+
+const deleteBucketByRole = async (req,res)=>{
+  const roleId = req.params.roleId;
+  const bucketName = req.query.bucketName;
+  try{
+    if(!roleId){
+      return res.status(400).json({message:"RoleId is required"});
+    }
+    if(!bucketName){
+      return res.status(400).json({message:'Bucket name is required'});
+    }
+    if(req.user.user_type !== 'superadmin'){
+      return res.status(403).json({message:"Only superadmin can delete roles"});
+    }
+
+    const [result] = await db.query('DELETE FROM role_buckets Where role_id = ? AND bucket_name = ?',[roleId,bucketName]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Bucket not found" });
+    }
+    res.status(200).json({message:"Bucket deleted successfully"});
+  }catch(error){
+    console.log('error deleting buckets assignd to user', error)
+  }
+
+}
+
 const assignRoleToUser = async (req, res) => {
   const { userId, roleId } = req.params;
   try {
@@ -131,4 +192,7 @@ module.exports = {
   assignRoleToUser,
   getAllRoles,
   getAllUsers,
+  deleteRole,
+  getBucketsByRoleId,
+  deleteBucketByRole
 };
